@@ -24,10 +24,10 @@
   <!-- Local Libraries for Offline Resilience -->
   <script src="lib/dexie.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
-  <script src="lib/qrcode.min.js?v=38"></script>
+  <script src="lib/qrcode.min.js?v=40"></script>
   
   <!-- Styling -->
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
   
@@ -85,7 +85,6 @@
       <section id="panel-cuenta" class="view-panel">
         <div class="panel-header">
           <h2 class="panel-title">Cuenta Actual</h2>
-          <p class="panel-subtitle">Control personal de consumo continuo (varios días)</p>
         </div>
         
         <!-- Account Info Card -->
@@ -95,7 +94,6 @@
               <span class="user-avatar-icon">👤</span>
               <div>
                 <h3 class="user-name-title" id="cuenta-user-display">Andres Platarrueda</h3>
-                <p class="user-account-sub">Consumo Personal en Casino Egipto</p>
               </div>
             </div>
             <span class="account-status-badge" id="cuenta-status-badge">Cuenta Abierta</span>
@@ -103,12 +101,12 @@
           
           <div class="form-row margin-top-12">
             <div class="form-group flex-1">
-              <label for="cuenta-fecha-inicio">Fecha / Hora Inicio</label>
-              <input type="datetime-local" id="cuenta-fecha-inicio" class="form-control">
+              <label for="cuenta-fecha-inicio">Fecha Inicio</label>
+              <input type="date" id="cuenta-fecha-inicio" class="form-control">
             </div>
             <div class="form-group flex-1">
               <label for="cuenta-fecha-fin">Último Consumo</label>
-              <input type="datetime-local" id="cuenta-fecha-fin" class="form-control">
+              <input type="date" id="cuenta-fecha-fin" class="form-control">
             </div>
           </div>
         </div>
@@ -130,27 +128,36 @@
           </div>
         </div>
         
-        <!-- Bottom Floating Action Bar -->
-        <div class="bottom-actions">
-          <button id="btn-save-account" class="btn btn-primary btn-block">
-            <span class="btn-icon" id="btn-save-icon">🚀</span> <span id="btn-save-text">Iniciar Cuenta</span>
-          </button>
-          
-          <button id="btn-pay-modal" class="btn btn-pay-style btn-block margin-top-8" onclick="openPaymentModal();">
-            <span class="btn-icon">💳</span> Pagar / Código QR
-          </button>
-
-          <div class="action-buttons-grid">
-            <button id="btn-generate-pdf-main" class="btn btn-accent">
-              <span class="btn-icon">📄</span> Generar Ticket
-            </button>
-            <button id="btn-send-email-main" class="btn btn-email-main-style" style="background-color: #1877f2; color: #fff; border: none;">
-              <span class="btn-icon">📊</span> Compartir
+        <!-- Bottom Floating Action Bar with collapse toggle -->
+        <div class="bottom-actions" id="bottom-actions-container">
+          <div class="bottom-actions-toggle-bar" id="btn-toggle-bottom-actions" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding-bottom: 6px; user-select: none;">
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Acciones de Cuenta</span>
+            <button type="button" class="btn btn-text btn-sm" style="padding: 2px 8px; font-size: 13px; color: var(--color-primary); font-weight: 700; background: none; border: none;">
+              <span id="bottom-actions-toggle-icon">▼</span> <span id="bottom-actions-toggle-text" style="font-size: 11.5px; margin-left: 4px;">Ocultar</span>
             </button>
           </div>
-          <button id="btn-clear-account" class="btn btn-danger btn-block margin-top-8" style="background-color: #ef4444; color: #fff; border: none;">
-            <span class="btn-icon">🏁</span> Finalizar Cuenta
-          </button>
+
+          <div id="bottom-actions-content" class="bottom-actions-content">
+            <button id="btn-save-account" class="btn btn-primary btn-block">
+              <span class="btn-icon" id="btn-save-icon">🚀</span> <span id="btn-save-text">Iniciar Cuenta</span>
+            </button>
+            
+            <button id="btn-pay-modal" class="btn btn-pay-style btn-block margin-top-8" onclick="openPaymentModal();">
+              <span class="btn-icon">💳</span> Pagar / Código QR
+            </button>
+
+            <div class="action-buttons-grid">
+              <button id="btn-generate-pdf-main" class="btn btn-accent">
+                <span class="btn-icon">📄</span> Generar Ticket
+              </button>
+              <button id="btn-send-email-main" class="btn btn-email-main-style" style="background-color: #1877f2; color: #fff; border: none;">
+                <span class="btn-icon">📊</span> Compartir
+              </button>
+            </div>
+            <button id="btn-clear-account" class="btn btn-danger btn-block margin-top-8" style="background-color: #ef4444; color: #fff; border: none;">
+              <span class="btn-icon">🏁</span> Finalizar Cuenta
+            </button>
+          </div>
         </div>
       </section>
       
@@ -225,7 +232,7 @@
             <input type="text" id="nequi-num-input" class="form-control" placeholder="Ej. 3001234567">
           </div>
           
-          <button id="btn-save-payment-config" class="btn btn-accent btn-block margin-top-12">
+          <button id="btn-save-payment-config" class="btn btn-primary btn-block margin-top-12">
             <span class="btn-icon">💾</span> Guardar Métodos de Pago
           </button>
         </div>
@@ -278,7 +285,7 @@
           </div>
           
           <div style="display: flex; gap: 8px;" class="margin-top-12">
-            <button id="btn-save-menu-item" class="btn btn-accent flex-2">
+            <button id="btn-save-menu-item" class="btn btn-primary flex-2">
               <span class="btn-icon" id="btn-menu-item-icon">➕</span> <span id="btn-menu-item-text">Guardar Producto en Menú</span>
             </button>
             <button id="btn-cancel-menu-edit" class="btn btn-secondary flex-1" style="display: none;">
@@ -302,7 +309,7 @@
             <div class="form-group flex-1" style="margin-bottom:0;">
               <input type="text" id="new-category-input" class="form-control" placeholder="Nombre de nueva categoría...">
             </div>
-            <button id="btn-add-category" class="btn btn-accent" style="align-self:flex-end;white-space:nowrap;">
+            <button id="btn-add-category" class="btn btn-primary" style="align-self:flex-end;white-space:nowrap;">
               <span class="btn-icon">➕</span> Agregar
             </button>
           </div>
@@ -314,7 +321,7 @@
         <!-- Data Backup Management Card -->
         <div class="card settings-card">
           <h3 class="card-title">Gestión de Copias de Seguridad (JSON)</h3>
-          <div class="button-group-row">
+          <div class="button-group-row" style="display: flex; gap: 12px;">
             <button id="btn-export-db" class="btn btn-secondary flex-1">
               <span class="btn-icon">📤</span> Exportar Respaldo
             </button>
@@ -501,6 +508,6 @@
     }
     window.openPaymentModal = openPaymentModal;
   </script>
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>

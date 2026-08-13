@@ -616,11 +616,28 @@ label {
   position: sticky;
   bottom: 60px;
   background-color: var(--bg-color);
-  padding: 12px 16px 16px 16px;
+  padding: 10px 16px 14px 16px;
   border-top: 1px solid var(--card-border);
   margin-top: auto;
   z-index: 50;
   box-shadow: 0 -6px 15px rgba(0, 0, 0, 0.4);
+}
+
+.bottom-actions-toggle-bar:hover {
+  opacity: 0.85;
+}
+
+.bottom-actions-content {
+  transition: all 0.3s ease-in-out;
+}
+
+.bottom-actions-content.collapsed {
+  display: none !important;
+}
+
+.button-group-row {
+  display: flex !important;
+  gap: 12px !important;
 }
 
 .action-buttons-grid {

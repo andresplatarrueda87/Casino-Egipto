@@ -107,14 +107,14 @@ function formatDateTimeISO(date) {
   if (!date) return '';
   const d = new Date(date);
   const pad = num => String(num).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatDateTimeShort(date) {
   if (!date) return '';
   const d = new Date(date);
   const pad = num => String(num).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
 // --- 4. DOM Initialization ---
@@ -423,10 +423,15 @@ function addToCart(item) {
     };
   }
   
-  showToast(`+1 ${item.name} agregado`, 'success', 1200);
+  const currentQty = STATE.cart[item.id].qty;
+  showToast(`+1 ${item.name} agregado (${currentQty})`, 'success', 1200);
   updateAccountStatusUI();
   updateCartNavBadge();
-  renderMenuGrid();
+  
+  // Actualizar solo el botón de la tarjeta correspondiente sin recrear el DOM ni mover el scroll
+  document.querySelectorAll(`.btn-add-to-cart[data-id="${item.id}"]`).forEach(btn => {
+    btn.innerHTML = `<span class="btn-icon">✓</span><span>Agregado (${currentQty})</span>`;
+  });
 }
 
 function updateCartNavBadge() {
@@ -548,6 +553,28 @@ function setupEventListeners() {
     
     await saveAccountFromUI(true);
   });
+
+  // Toggle collapse/expand bottom actions in Cuenta
+  const toggleBtn = document.getElementById('btn-toggle-bottom-actions');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const content = document.getElementById('bottom-actions-content');
+      const icon = document.getElementById('bottom-actions-toggle-icon');
+      const text = document.getElementById('bottom-actions-toggle-text');
+      if (content) {
+        const isCollapsed = content.classList.contains('collapsed');
+        if (isCollapsed) {
+          content.classList.remove('collapsed');
+          if (icon) icon.innerText = '▼';
+          if (text) text.innerText = 'Ocultar';
+        } else {
+          content.classList.add('collapsed');
+          if (icon) icon.innerText = '▲';
+          if (text) text.innerText = 'Mostrar';
+        }
+      }
+    });
+  }
   
   // Generate Ticket PDF
   document.getElementById('btn-generate-pdf-main').addEventListener('click', async () => {
@@ -1123,7 +1150,9 @@ async function renderHistoryList() {
     
     const dateStartFormatted = formatDateTimeShort(account.dateStart);
     const dateEndFormatted = account.dateEnd ? formatDateTimeShort(account.dateEnd) : dateStartFormatted;
-    const dateRangeHeader = `${dateStartFormatted} - ${dateEndFormatted}`;
+    const dateRangeHeader = (dateStartFormatted === dateEndFormatted || !account.dateEnd)
+      ? dateStartFormatted
+      : `${dateStartFormatted} - ${dateEndFormatted}`;
 
     card.innerHTML = `
       <div class="history-header">
