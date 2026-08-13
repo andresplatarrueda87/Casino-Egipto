@@ -33,7 +33,7 @@ const DEFAULT_CATEGORIES = ["Almuerzos", "Desayunos", "Bebidas", "Sopas", "Galle
 
 const DEFAULT_USER_NAME = "Andres Platarrueda";
 const DEFAULT_BANCOLOMBIA_NUM = "838-567083-43";
-const DEFAULT_BANCOLOMBIA_TYPE = "Cuenta Corriente";
+const DEFAULT_BANCOLOMBIA_TYPE = "Corriente";
 const DEFAULT_NEQUI_NUM = "3001234567";
 
 // --- 2. Application State ---
@@ -103,16 +103,38 @@ function formatCurrency(amount) {
   return formatted.replace('COP', '$').trim();
 }
 
+function parseLocalDate(val) {
+  if (!val) return new Date();
+  if (val instanceof Date) return val;
+  if (typeof val === 'string') {
+    const matchYMD = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matchYMD) {
+      return new Date(Number(matchYMD[1]), Number(matchYMD[2]) - 1, Number(matchYMD[3]), 12, 0, 0);
+    }
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
 function formatDateTimeISO(date) {
   if (!date) return '';
-  const d = new Date(date);
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  const d = parseLocalDate(date);
   const pad = num => String(num).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function formatDateTimeShort(date) {
   if (!date) return '';
-  const d = new Date(date);
+  if (typeof date === 'string') {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+  }
+  const d = parseLocalDate(date);
   const pad = num => String(num).padStart(2, '0');
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
@@ -216,8 +238,10 @@ async function loadUserSettings() {
   if (!bNum) await db.settings.put({ key: 'bancolombiaNum', value: DEFAULT_BANCOLOMBIA_NUM });
 
   const bType = await db.settings.get('bancolombiaType');
-  STATE.bancolombiaType = bType ? bType.value : DEFAULT_BANCOLOMBIA_TYPE;
-  if (!bType) await db.settings.put({ key: 'bancolombiaType', value: DEFAULT_BANCOLOMBIA_TYPE });
+  let loadedType = bType ? bType.value : DEFAULT_BANCOLOMBIA_TYPE;
+  loadedType = loadedType.replace(/cuenta\s+(de\s+)?/i, '').trim() || 'Corriente';
+  STATE.bancolombiaType = loadedType;
+  if (!bType) await db.settings.put({ key: 'bancolombiaType', value: STATE.bancolombiaType });
 
   const nNum = await db.settings.get('nequiNum');
   STATE.nequiNum = nNum ? nNum.value : DEFAULT_NEQUI_NUM;
@@ -638,7 +662,8 @@ function setupEventListeners() {
   // Payment Config Save
   document.getElementById('btn-save-payment-config').addEventListener('click', async () => {
     const bNum = document.getElementById('bancolombia-num-input').value.trim();
-    const bType = document.getElementById('bancolombia-type-input').value;
+    const bTypeRaw = document.getElementById('bancolombia-type-input').value;
+    const bType = bTypeRaw.replace(/cuenta\s+(de\s+)?/i, '').trim() || 'Corriente';
     const nNum = document.getElementById('nequi-num-input').value.trim();
 
     if (!bNum) {
@@ -988,7 +1013,8 @@ function openPaymentModal(customAmount = null) {
   document.getElementById('pay-bancolombia-amount').innerText = formattedAmount;
   document.getElementById('pay-nequi-amount').innerText = formattedAmount;
 
-  document.getElementById('pay-bancolombia-type').innerText = STATE.bancolombiaType;
+  const cleanType = (STATE.bancolombiaType || 'Corriente').replace(/cuenta\s+(de\s+)?/i, '').trim() || 'Corriente';
+  document.getElementById('pay-bancolombia-type').innerText = cleanType;
   document.getElementById('pay-bancolombia-num').innerText = STATE.bancolombiaNum;
   document.getElementById('pay-nequi-num').innerText = STATE.nequiNum || "No configurado";
 
@@ -1134,7 +1160,19 @@ async function renderHistoryList() {
     );
   }
   
-  accountsArray.sort((a, b) => b.updatedAt ? b.updatedAt.localeCompare(a.updatedAt) : b.id.localeCompare(a.id));
+  // Ordenar primero por estado (Abiertas primero) y luego por fecha descendente (más reciente primero)
+  accountsArray.sort((a, b) => {
+    const isAOpen = (a.status === 'abierta') ? 1 : 0;
+    const isBOpen = (b.status === 'abierta') ? 1 : 0;
+    
+    if (isAOpen !== isBOpen) {
+      return isBOpen - isAOpen; // Cuentas abiertas (1) arriba de cerradas (0)
+    }
+    
+    const dateA = a.dateEnd || a.dateStart || a.updatedAt || a.id || '';
+    const dateB = b.dateEnd || b.dateStart || b.updatedAt || b.id || '';
+    return dateB.localeCompare(dateA);
+  });
   
   const grandSum = accountsArray.reduce((sum, a) => sum + (a.total || 0), 0);
   document.getElementById('history-total-sum').innerText = `Total Recaudado: ${formatCurrency(grandSum)}`;
@@ -1151,7 +1189,7 @@ async function renderHistoryList() {
   }
   
   accountsArray.forEach((account, index) => {
-    const isExpandedDefault = (index === 0);
+    const isExpandedDefault = false;
     const card = document.createElement('div');
     card.className = `card history-card ${isExpandedDefault ? 'expanded' : 'collapsed'}`;
     
@@ -1507,13 +1545,30 @@ async function generateTicketPdf(accountData) {
     const url = URL.createObjectURL(blob);
     const fileName = `Ticket_CasinoEgipto_${(accountData.clientName || 'Usuario').replace(/\s+/g, '_')}.pdf`;
     
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // Descarga directa
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName;
+    a.target = '_blank';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      if (document.body.contains(a)) document.body.removeChild(a);
+    }, 1000);
+
+    // En Android / Móvil abrir pestaña para visualización inmediata
+    if (isMobile) {
+      window.open(url, '_blank');
+    }
+
+    // Mantener la URL del blob activa por 2 minutos para permitir que Android complete la descarga y apertura
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 120000);
     
-    showToast("Ticket PDF generado y descargado con éxito", "success", 2000);
+    showToast("✅ Ticket PDF generado y listo", "success", 2000);
   } catch (err) {
     console.error(err);
     showToast("Error al generar Ticket PDF: " + err.message, "error", 2500);

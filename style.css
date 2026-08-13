@@ -1014,16 +1014,30 @@ label {
   margin-bottom: 6px;
 }
 .pay-number-value {
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.04em;
-  line-height: 1.1;
+  color: #f3f4f6;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
 }
 .pay-number-meta {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 8px;
+  font-size: 13px;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+#pay-bancolombia-type {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 2px 9px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 .pay-number-meta .text-primary-color { color: var(--color-primary); }
 
