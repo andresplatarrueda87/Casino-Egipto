@@ -490,8 +490,12 @@ function renderCartView() {
         <span class="qty-val">${item.qty}</span>
         <button class="qty-btn btn-qty-plus" data-id="${item.id}">+</button>
       </div>
-      <div class="cart-item-subtotal">${formatCurrency(subtotal)}</div>
-      <button class="btn btn-text btn-remove-item" data-id="${item.id}" style="color: #ef4444; font-size: 16px; padding: 4px;">✕</button>
+      <div class="cart-item-right-box">
+        <div class="cart-item-subtotal">${formatCurrency(subtotal)}</div>
+        <button type="button" class="btn btn-remove-item" data-id="${item.id}" title="Eliminar producto">
+          <span>✕</span>
+        </button>
+      </div>
     `;
     
     row.querySelector('.btn-qty-minus').addEventListener('click', () => {
@@ -606,14 +610,14 @@ function setupEventListeners() {
       return;
     }
     
-    if (confirm("¿Desea finalizar y cerrar la cuenta actual? Se guardará el consumo final en el histórico y el botón volverá a Iniciar Cuenta.")) {
+    if (confirm("¿Desea finalizar y cerrar la cuenta actual? Se guardará como CERRADA en el histórico y el botón volverá a Iniciar Cuenta.")) {
       if (cartItemsCount > 0) {
-        await saveAccountFromUI(false);
+        await saveAccountFromUI(false, 'cerrada');
       }
       initNewAccountState();
       renderCartView();
       renderMenuGrid();
-      showToast("Cuenta finalizada y guardada en el histórico. Listo para Iniciar Cuenta nueva.", "success", 2500);
+      showToast("Cuenta finalizada y cerrada en el histórico.", "success", 2500);
     }
   });
   
@@ -963,15 +967,21 @@ function buildNequiQR(phoneNumber) {
 
 // ── Modal de Pago ──────────────────────────────────────────────────────────
 
-function openPaymentModal() {
+function openPaymentModal(customAmount = null) {
   const modal = document.getElementById('payment-modal');
   if (modal) {
     modal.classList.add('open');
     modal.style.setProperty('display', 'flex', 'important');
   }
 
-  const items = Object.values(STATE.cart);
-  const grandTotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+  let grandTotal = 0;
+  if (customAmount !== null && !isNaN(customAmount)) {
+    grandTotal = Number(customAmount);
+  } else {
+    const items = Object.values(STATE.cart);
+    grandTotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+  }
+  
   const formattedAmount = formatCurrency(grandTotal);
 
   document.getElementById('payment-modal-amount-subtitle').innerText = `Total a Pagar: ${formattedAmount}`;
@@ -983,9 +993,6 @@ function openPaymentModal() {
   document.getElementById('pay-nequi-num').innerText = STATE.nequiNum || "No configurado";
 
   // QR Bancolombia — solo número de cuenta limpio (sin guiones)
-  // El QR EMVCo requiere validación online en los servidores de Bancolombia
-  // (solo disponible para comercios registrados). Para transferencias personales
-  // usamos el número de cuenta puro para que quien escanee lo use directamente.
   try {
     const qrBancolombiaBox = document.getElementById('qr-bancolombia-box');
     if (qrBancolombiaBox && window.QRCode) {
@@ -1021,7 +1028,7 @@ function openPaymentModal() {
 }
 window.triggerOpenPaymentModal = openPaymentModal;
 
-function getAccountDataFromUI() {
+function getAccountDataFromUI(status = 'abierta') {
   const clientName = STATE.userName || 'Usuario Casino';
   const dateStart = document.getElementById('cuenta-fecha-inicio').value;
   const dateEnd = document.getElementById('cuenta-fecha-fin').value;
@@ -1044,6 +1051,7 @@ function getAccountDataFromUI() {
   return {
     id: STATE.activeAccountId || `CUENTA-${now.getTime()}`,
     clientName: clientName,
+    status: status, // 'abierta' o 'cerrada'
     notes: '',
     dateStart: dateStart || formatDateTimeISO(now),
     dateEnd: dateEnd || formatDateTimeISO(now),
@@ -1054,8 +1062,8 @@ function getAccountDataFromUI() {
   };
 }
 
-async function saveAccountFromUI(showNotification = true) {
-  const accountData = getAccountDataFromUI();
+async function saveAccountFromUI(showNotification = true, status = 'abierta') {
+  const accountData = getAccountDataFromUI(status);
   if (!accountData.items || accountData.items.length === 0) {
     showToast("Debe agregar productos a la cuenta para poder guardar", "warning", 2000);
     return false;
@@ -1080,7 +1088,9 @@ async function saveAccountFromUI(showNotification = true) {
   }
 
   if (saved) {
-    STATE.isAccountStarted = true;
+    if (status === 'abierta') {
+      STATE.isAccountStarted = true;
+    }
     updateAccountStatusUI();
     if (showNotification) {
       showToast("Cuenta del Casino guardada con éxito", "success", 2000);
@@ -1154,10 +1164,20 @@ async function renderHistoryList() {
       ? dateStartFormatted
       : `${dateStartFormatted} - ${dateEndFormatted}`;
 
+    const isOpen = (account.status === 'abierta');
+    const statusBadgeHtml = isOpen
+      ? `<span class="account-status-badge open" style="font-size: 11px; padding: 2px 8px;">🟢 Abierta</span>`
+      : `<span class="account-status-badge closed" style="font-size: 11px; padding: 2px 8px;">🔴 Cerrada</span>`;
+
+    const payButtonHtml = isOpen
+      ? `<button class="btn btn-pay-style btn-sm btn-pay-account" data-id="${account.id}" style="padding: 4px 10px; font-size: 12px;">💳 Pagar</button>`
+      : '';
+
     card.innerHTML = `
       <div class="history-header">
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
           <span class="history-client">${account.clientName || 'Usuario Casino'}</span>
+          ${statusBadgeHtml}
           <span class="history-dates">${dateRangeHeader}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
@@ -1170,12 +1190,14 @@ async function renderHistoryList() {
       
       <div class="history-body" style="${isExpandedDefault ? 'display: block;' : 'display: none;'}">
         <div class="history-details margin-top-12">
+          <span class="detail-badge">Estado: ${isOpen ? '🟢 Abierta (En consumo)' : '🔴 Cerrada (Finalizada)'}</span>
           <span class="detail-badge">Inicio: ${formatDateTimeShort(account.dateStart)}</span>
           <span class="detail-badge">Último Consumo: ${formatDateTimeShort(account.dateEnd)}</span>
           <span class="detail-badge">Productos (${account.totalQty || 0}): ${itemsSummaryText}</span>
           <span class="detail-badge" style="border-color: rgba(59, 174, 42, 0.4); color: var(--color-primary);">🕒 Guardado: ${formatDateTimeShort(account.updatedAt)}</span>
         </div>
         <div class="history-actions margin-top-12">
+          ${payButtonHtml}
           <button class="btn btn-secondary btn-sm btn-edit-account" data-id="${account.id}">Cargar / Editar</button>
           <button class="btn btn-accent btn-sm btn-pdf-account" data-id="${account.id}">Generar Ticket</button>
           <button class="btn btn-sm btn-email-account" data-id="${account.id}" style="background-color: #1877f2; color: #ffffff; border: none; font-weight: 600;">📊 Compartir</button>
@@ -1227,6 +1249,15 @@ async function renderHistoryList() {
       showToast("Cuenta cargada para edición", "info", 1800);
     });
     
+    if (isOpen) {
+      const payBtn = card.querySelector('.btn-pay-account');
+      if (payBtn) {
+        payBtn.addEventListener('click', () => {
+          openPaymentModal(account.total);
+        });
+      }
+    }
+
     card.querySelector('.btn-pdf-account').addEventListener('click', () => {
       generateTicketPdf(account);
     });

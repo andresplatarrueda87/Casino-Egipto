@@ -205,6 +205,12 @@ body {
   border: 1px solid rgba(59, 174, 42, 0.4);
 }
 
+.account-status-badge.closed {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .account-status-badge.new {
   background-color: rgba(37, 99, 235, 0.15);
   color: #60a5fa;
@@ -485,8 +491,38 @@ label {
   font-size: 14px;
   font-weight: 800;
   color: var(--color-primary);
-  min-width: 70px;
   text-align: right;
+}
+
+.cart-item-right-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  min-width: 65px;
+}
+
+.btn-remove-item {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 2px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-remove-item:hover {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
 }
 
 .cart-total-box {
