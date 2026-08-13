@@ -310,9 +310,9 @@ label {
 
 .category-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 4px;
 }
 
 .cat-btn {
@@ -356,15 +356,20 @@ label {
 .menu-card-img-wrapper {
   position: relative;
   width: 100%;
-  height: 120px;
-  background-color: #141416;
+  height: 130px;
+  background-color: #121214;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
   overflow: hidden;
 }
 
 .menu-card-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  transition: transform 0.2s ease;
 }
 
 .menu-card-badge {
@@ -436,8 +441,9 @@ label {
   width: 44px;
   height: 44px;
   border-radius: 6px;
-  object-fit: cover;
+  object-fit: contain;
   background-color: #141416;
+  padding: 2px;
 }
 
 .cart-item-name {
@@ -579,6 +585,23 @@ label {
   color: var(--color-primary);
 }
 
+.history-details {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px 8px !important;
+}
+
+.history-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px 10px !important;
+  align-items: center !important;
+}
+
+.history-actions .btn {
+  margin: 0 !important;
+}
+
 /* Settings Menu Items List */
 .settings-menu-item-row {
   display: flex;
@@ -622,10 +645,14 @@ label {
 }
 
 .btn-email-main-style {
-  background-color: #ea4335 !important;
+  background-color: #1877f2 !important;
   color: #ffffff !important;
   border: none !important;
   font-weight: 600 !important;
+}
+
+.btn-email-main-style:hover {
+  background-color: #166fe5 !important;
 }
 
 /* Bottom Navigation Bar */
@@ -859,64 +886,189 @@ label {
   display: block;
 }
 
+/* Logo en las pestañas */
+.tab-logo {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-right: 4px;
+  border-radius: 4px;
+}
+
+/* Logo grande en cabecera de cada tab */
+.pay-bank-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 14px;
+}
+.pay-bank-logo {
+  height: 40px;
+  max-width: 160px;
+  object-fit: contain;
+  filter: brightness(1.05);
+}
+
+/* ── Payment Modal Redesign ─────────────────────────────────── */
+
+/* Steps */
+.pay-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.pay-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.pay-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pay-step strong { color: #fff; }
+
+/* Big number card */
+.pay-number-card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-align: center;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.pay-number-card:active { background: rgba(255,255,255,0.12); }
+.pay-number-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.pay-number-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+.pay-number-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.pay-number-meta .text-primary-color { color: var(--color-primary); }
+
+/* QR reference row */
+.qr-ref-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.qr-box-sm {
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.qr-box-sm canvas,
+.qr-box-sm img {
+  width: 90px !important;
+  height: 90px !important;
+}
+.qr-ref-info { flex: 1; }
+.qr-ref-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.qr-ref-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.qr-ref-desc em { opacity: 0.7; }
+
+/* keep legacy styles for other uses */
 .qr-container {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background: #ffffff !important;
-  padding: 16px !important;
-  border-radius: 12px !important;
-  margin-bottom: 16px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
 }
-
 .qr-box {
-  width: 200px !important;
-  height: 200px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-
-.qr-box canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.qr-hint {
-  font-size: 12px !important;
-  color: #333333 !important;
-  font-weight: 700 !important;
-  margin-top: 8px !important;
-}
+.qr-box canvas { width: 100%; height: 100%; }
+.qr-hint { font-size: 12px; color: #333; font-weight: 700; margin-top: 8px; }
 
 .payment-info-box {
-  background: rgba(0, 0, 0, 0.3) !important;
-  border: 1px solid var(--card-border) !important;
-  border-radius: var(--radius-sm) !important;
-  padding: 12px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 6px !important;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-
 .info-line {
-  display: flex !important;
-  justify-content: space-between !important;
-  font-size: 13px !important;
-  color: var(--text-secondary) !important;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
+.info-line strong { color: #ffffff; }
 
-.info-line strong {
-  color: #ffffff !important;
-}
-
-.text-primary-color {
-  color: var(--color-primary) !important;
-}
+.text-primary-color { color: var(--color-primary) !important; }
 
 .modal-actions-grid {
   display: flex !important;
   gap: 10px !important;
 }
 
+#btn-send-email-main,
+.btn-email-main-style {
+  background-color: #1877f2 !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+
+#btn-send-email-main:hover,
+.btn-email-main-style:hover {
+  background-color: #166fe5 !important;
+}

@@ -9,14 +9,27 @@ db.version(1).stores({
   accounts: 'id, clientName, dateStart, dateEnd, total',
   settings: 'key, value'
 });
+db.version(2).stores({
+  menuItems: '++id, name, category, price',
+  accounts: 'id, clientName, dateStart, dateEnd, total',
+  settings: 'key, value'
+});
 
 // Seed Data for Initial Menu Items
 const DEFAULT_MENU_ITEMS = [
   { name: "Almuerzo", price: 16000, category: "Almuerzos", img: "img/almuerzo.jpg" },
   { name: "Almuerzo con Sopa", price: 17000, category: "Almuerzos", img: "img/almuerzo_sopa.jpg" },
   { name: "Desayuno", price: 9000, category: "Desayunos", img: "img/desayuno.jpg" },
-  { name: "Agua botella 600 ml", price: 2000, category: "Bebidas", img: "img/agua_botella.jpg" }
+  { name: "Agua botella 600 ml", price: 2000, category: "Bebidas", img: "img/agua_botella.jpg" },
+  { name: "Sopa", price: 1000, category: "Almuerzos", img: "img/almuerzo_sopa.jpg" },
+  { name: "CocaCola 400 ml", price: 3000, category: "Bebidas", img: "img/coca-cola-original-400-ml.jpg" },
+  { name: "CocaCola Zero 400 ml", price: 3000, category: "Bebidas", img: "img/cocacola-zero-400ml.jpg" },
+  { name: "Galleta Festival x6", price: 1500, category: "Galletas", img: "img/galletas-festival-x6.jpg" },
+  { name: "Palomitas Caramelo Yupi", price: 2000, category: "Paquetes", img: "img/palomitasyupi.png" },
+  { name: "Chocolatina Jet 11 g", price: 1000, category: "Chocolatinas", img: "img/Chocolatina-Jet-11g.webp" }
 ];
+
+const DEFAULT_CATEGORIES = ["Almuerzos", "Desayunos", "Bebidas", "Sopas", "Galletas", "Paquetes", "Chocolatinas", "Otros"];
 
 const DEFAULT_USER_NAME = "Andres Platarrueda";
 const DEFAULT_BANCOLOMBIA_NUM = "838-567083-43";
@@ -105,28 +118,87 @@ function formatDateTimeShort(date) {
 }
 
 // --- 4. DOM Initialization ---
-document.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
   registerServiceWorker();
   updateOnlineStatus();
   window.addEventListener('online', updateOnlineStatus);
   window.addEventListener('offline', updateOnlineStatus);
   
-  await initializeMenuSeedData();
-  await loadUserSettings();
+  try {
+    await db.open();
+  } catch (err) {
+    console.warn("Dexie open failed, recreando base de datos:", err);
+    try {
+      await Dexie.delete('casino_egipto_db');
+      await db.open();
+    } catch (err2) {
+      console.error("Dexie delete/open failed:", err2);
+    }
+  }
+
+  try {
+    await initializeMenuSeedData();
+  } catch (e) {
+    console.error("Error inicializando datos:", e);
+  }
+
+  try {
+    await loadUserSettings();
+  } catch (e) {
+    console.error("Error cargando configuración:", e);
+  }
+
   setupNavigation();
   setupEventListeners();
+
+  try {
+    await renderCategoryTabs();
+    await populateCategorySelect();
+    await renderCategoriesSettings();
+  } catch (e) {
+    console.error("Error preparando categorías:", e);
+  }
   
   initNewAccountState();
-  await renderMenuGrid();
-  await renderCartView();
-});
+  try {
+    await renderMenuGrid();
+    await renderCartView();
+  } catch (e) {
+    console.error("Error renderizando menú/carrito:", e);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
 
 async function initializeMenuSeedData() {
-  const count = await db.menuItems.count();
-  if (count === 0) {
+  try {
+    const currentItems = await db.menuItems.toArray();
     for (const item of DEFAULT_MENU_ITEMS) {
-      await db.menuItems.add(item);
+      const exists = currentItems.some(i => i.name && i.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      if (!exists) {
+        await db.menuItems.add(item);
+      }
     }
+  } catch (e) {
+    console.error("Error en initializeMenuSeedData items:", e);
+  }
+
+  // Inicializar/actualizar categorias en settings
+  try {
+    const cats = await db.settings.get('categories');
+    let currentCats = [];
+    if (cats && cats.value) {
+      currentCats = typeof cats.value === 'string' ? JSON.parse(cats.value) : cats.value;
+      if (!Array.isArray(currentCats)) currentCats = [];
+    }
+    const merged = [...new Set([...currentCats, ...DEFAULT_CATEGORIES])];
+    await db.settings.put({ key: 'categories', value: JSON.stringify(merged) });
+  } catch (e) {
+    console.error("Error en initializeMenuSeedData categories:", e);
   }
 }
 
@@ -229,6 +301,8 @@ function setupNavigation() {
         renderHistoryList();
       } else if (targetPanelId === 'panel-ajustes') {
         renderSettingsMenuList();
+        renderCategoriesSettings();
+        populateCategorySelect();
       } else if (targetPanelId === 'panel-cuenta') {
         renderCartView();
       }
@@ -239,29 +313,43 @@ function setupNavigation() {
 // --- 6. Menu Grid Rendering ---
 async function renderMenuGrid() {
   const grid = document.getElementById('menu-grid');
+  if (!grid) return;
   grid.innerHTML = '';
   
-  const searchVal = document.getElementById('search-menu').value.trim().toLowerCase();
-  let items = await db.menuItems.toArray();
+  const searchVal = (document.getElementById('search-menu')?.value || '').trim().toLowerCase();
+  let items = [];
+  
+  try {
+    items = await db.menuItems.toArray();
+  } catch (e) {
+    console.warn("Error leyendo de db.menuItems, usando datos por defecto:", e);
+  }
+  
+  // Fallback garantizado: si items está vacío, poblar con DEFAULT_MENU_ITEMS
+  if (!items || items.length === 0) {
+    items = DEFAULT_MENU_ITEMS.map((item, idx) => ({ ...item, id: idx + 1 }));
+    // Reintentar guardado en background
+    initializeMenuSeedData();
+  }
   
   if (STATE.currentCategory !== 'todos') {
-    items = items.filter(i => i.category.toLowerCase() === STATE.currentCategory.toLowerCase());
+    items = items.filter(i => (i.category || '').toLowerCase() === STATE.currentCategory.toLowerCase());
   }
   
   if (searchVal) {
-    items = items.filter(i => i.name.toLowerCase().includes(searchVal) || (i.category && i.category.toLowerCase().includes(searchVal)));
+    items = items.filter(i => (i.name && i.name.toLowerCase().includes(searchVal)) || (i.category && i.category.toLowerCase().includes(searchVal)));
   }
   
   if (items.length === 0) {
     grid.innerHTML = `
       <div class="card margin-top-12" style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 30px;">
-        <p>No se encontraron productos en el menú.</p>
+        <p>No se encontraron productos en esta categoría.</p>
       </div>
     `;
     return;
   }
   
-  items.forEach(item => {
+  const createItemCard = (item) => {
     const activeQty = STATE.cart[item.id] ? STATE.cart[item.id].qty : 0;
     const card = document.createElement('div');
     card.className = 'menu-card';
@@ -279,13 +367,43 @@ async function renderMenuGrid() {
         </button>
       </div>
     `;
-    
     card.querySelector('.btn-add-to-cart').addEventListener('click', () => {
       addToCart(item);
     });
+    return card;
+  };
+
+  if (STATE.currentCategory === 'todos') {
+    const grouped = {};
+    items.forEach(item => {
+      const cat = item.category || 'Otros';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(item);
+    });
     
-    grid.appendChild(card);
-  });
+    const cats = await getCategories();
+    const orderedCats = cats.filter(c => grouped[c]);
+    Object.keys(grouped).forEach(c => {
+      if (!orderedCats.includes(c)) orderedCats.push(c);
+    });
+
+    orderedCats.forEach(cat => {
+      const header = document.createElement('div');
+      header.style.gridColumn = '1 / -1';
+      header.style.marginTop = '12px';
+      header.style.marginBottom = '4px';
+      header.innerHTML = `<h3 style="color: #fff; font-size: 16px; border-bottom: 2px solid var(--accent-primary); padding-bottom: 4px; display: inline-block;">🏷️ ${cat}</h3>`;
+      grid.appendChild(header);
+      
+      grouped[cat].forEach(item => {
+        grid.appendChild(createItemCard(item));
+      });
+    });
+  } else {
+    items.forEach(item => {
+      grid.appendChild(createItemCard(item));
+    });
+  }
 }
 
 function addToCart(item) {
@@ -536,17 +654,28 @@ function setupEventListeners() {
 
   // Copy Buttons
   document.getElementById('btn-copy-bancolombia').addEventListener('click', () => {
+    // Copiar número limpio sin guiones para pegar directamente en la app
+    const numLimpio = (STATE.bancolombiaNum || '838-567083-43').replace(/[^0-9]/g, '');
+    navigator.clipboard.writeText(numLimpio);
+    showToast(`✅ Número copiado: ${numLimpio}`, "success", 2200);
+  });
+
+  document.getElementById('btn-copy-bancolombia-valor').addEventListener('click', () => {
     const grandTotal = Object.values(STATE.cart).reduce((sum, i) => sum + (i.price * i.qty), 0);
-    const textToCopy = `Bancolombia ${STATE.bancolombiaType}: ${STATE.bancolombiaNum}\nTotal a Pagar: ${formatCurrency(grandTotal)}`;
-    navigator.clipboard.writeText(textToCopy);
-    showToast("Datos de Bancolombia copiados al portapapeles", "success", 1800);
+    navigator.clipboard.writeText(String(grandTotal));
+    showToast(`✅ Valor copiado: ${formatCurrency(grandTotal)}`, "success", 2200);
   });
 
   document.getElementById('btn-copy-nequi').addEventListener('click', () => {
+    const numLimpio = (STATE.nequiNum || '').replace(/[^0-9]/g, '').slice(0, 10);
+    navigator.clipboard.writeText(numLimpio);
+    showToast(`✅ Número copiado: ${numLimpio}`, "success", 2200);
+  });
+
+  document.getElementById('btn-copy-nequi-valor').addEventListener('click', () => {
     const grandTotal = Object.values(STATE.cart).reduce((sum, i) => sum + (i.price * i.qty), 0);
-    const textToCopy = `Nequi: ${STATE.nequiNum}\nTotal a Pagar: ${formatCurrency(grandTotal)}`;
-    navigator.clipboard.writeText(textToCopy);
-    showToast("Datos de Nequi copiados al portapapeles", "success", 1800);
+    navigator.clipboard.writeText(String(grandTotal));
+    showToast(`✅ Valor copiado: ${formatCurrency(grandTotal)}`, "success", 2200);
   });
   
   // Add / Edit Menu Item in Settings
@@ -580,12 +709,59 @@ function setupEventListeners() {
     
     resetMenuItemForm();
     renderSettingsMenuList();
+    populateCategorySelect();
     renderMenuGrid();
   });
   
   document.getElementById('btn-cancel-menu-edit').addEventListener('click', () => {
     resetMenuItemForm();
   });
+
+  // Agregar nueva categoría
+  document.getElementById('btn-add-category').addEventListener('click', async () => {
+    const input = document.getElementById('new-category-input');
+    const name = input.value.trim();
+    if (!name) {
+      showToast('Ingrese el nombre de la categoría', 'warning', 1800);
+      return;
+    }
+    const cats = await getCategories();
+    if (cats.some(c => c.toLowerCase() === name.toLowerCase())) {
+      showToast(`La categoría "${name}" ya existe`, 'warning', 1800);
+      return;
+    }
+    cats.push(name);
+    await saveCategories(cats);
+    input.value = '';
+    renderCategoriesSettings();
+    populateCategorySelect();
+    showToast(`✅ Categoría "${name}" agregada`, 'success', 1800);
+  });
+
+  // Enter en el input de categoría
+  document.getElementById('new-category-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btn-add-category').click();
+  });
+
+  // Tomar Foto / Subir Imagen handlers
+  document.getElementById('btn-camera-capture').addEventListener('click', () => {
+    document.getElementById('input-item-camera').click();
+  });
+
+  document.getElementById('btn-file-upload').addEventListener('click', () => {
+    document.getElementById('input-item-file').click();
+  });
+
+  const handleImageInput = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      const prodName = document.getElementById('new-item-name').value.trim();
+      processAndUploadProductImage(file, prodName);
+    }
+  };
+
+  document.getElementById('input-item-camera').addEventListener('change', handleImageInput);
+  document.getElementById('input-item-file').addEventListener('change', handleImageInput);
   
   setupBackupHandlers();
 }
@@ -595,10 +771,97 @@ function resetMenuItemForm() {
   document.getElementById('new-item-name').value = '';
   document.getElementById('new-item-price').value = '';
   document.getElementById('new-item-img').value = '';
+  const camInput = document.getElementById('input-item-camera');
+  if (camInput) camInput.value = '';
+  const fileInput = document.getElementById('input-item-file');
+  if (fileInput) fileInput.value = '';
+  const previewContainer = document.getElementById('image-preview-container');
+  if (previewContainer) previewContainer.style.display = 'none';
+  const previewEl = document.getElementById('image-preview');
+  if (previewEl) previewEl.src = '';
   document.getElementById('form-menu-item-title').innerText = 'Agregar / Editar Producto al Menú';
   document.getElementById('btn-menu-item-icon').innerText = '➕';
   document.getElementById('btn-menu-item-text').innerText = 'Guardar Producto en Menú';
   document.getElementById('btn-cancel-menu-edit').style.display = 'none';
+}
+
+// Image compression and upload helper
+async function processAndUploadProductImage(file, productName) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        // Redimensionar a max 800px para optimizar rendimiento y almacenamiento
+        const maxDimension = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        // Mostrar vista previa inmediatamente
+        const previewEl = document.getElementById('image-preview');
+        const previewContainer = document.getElementById('image-preview-container');
+        const previewStatus = document.getElementById('image-preview-status');
+        if (previewEl && previewContainer) {
+          previewEl.src = dataUrl;
+          previewContainer.style.display = 'block';
+          if (previewStatus) previewStatus.innerText = '⏳ Guardando imagen en \\img...';
+        }
+
+        // Generar nombre de archivo limpio
+        const baseName = (productName || file.name.replace(/\.[^/.]+$/, '') || 'producto')
+          .toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .slice(0, 30);
+        const fileName = `${baseName}_${Date.now()}.jpg`;
+
+        // Enviar al backend para guardar en la carpeta \img
+        try {
+          const resp = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: fileName, image: dataUrl })
+          });
+          const result = await resp.json();
+          if (result.success && result.path) {
+            document.getElementById('new-item-img').value = result.path;
+            if (previewStatus) previewStatus.innerText = `✅ Guardada en \\${result.path}`;
+            showToast(`✅ Foto guardada en \\${result.path}`, 'success', 2000);
+            resolve(result.path);
+            return;
+          }
+        } catch (uploadErr) {
+          console.warn("Backend upload falló, usando DataURL local:", uploadErr);
+        }
+
+        // Respaldo offline: usar dataURL
+        document.getElementById('new-item-img').value = dataUrl;
+        if (previewStatus) previewStatus.innerText = '✅ Imagen cargada localmente';
+        showToast("✅ Imagen lista para el producto", "success", 1800);
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 window.closePaymentModal = function() {
@@ -614,6 +877,64 @@ window.addEventListener('keydown', (e) => {
     closePaymentModal();
   }
 });
+
+// ── Helpers para generar QR bancarios colombianos ──────────────────────────
+
+function crc16CCITT(str) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function tlv(tag, value) {
+  return `${tag}${String(value.length).padStart(2, '0')}${value}`;
+}
+
+/**
+ * Genera QR EMVCo estándar (Asobancaria Colombia) para transferencias Bancolombia.
+ * https://www.emvco.com/emv-technologies/qrcodes/
+ */
+function buildBancolombiaEMVCo(accountNumber, accountType, merchantName, amountCOP) {
+  const acctClean = accountNumber.replace(/[^0-9]/g, '');
+
+  // Merchant Account Information (tag 26) para Bancolombia
+  let mai = '';
+  mai += tlv('00', 'bancolombia.com.co');
+  mai += tlv('01', acctClean);
+  mai += tlv('02', accountType === 'Cuenta de Ahorros' ? 'SAVINGS' : 'CHECKING');
+
+  let payload = '';
+  payload += tlv('00', '01');             // Payload Format Indicator
+  payload += tlv('01', '12');             // Dynamic QR
+  payload += tlv('26', mai);             // Merchant Account Info
+  payload += tlv('52', '6011');          // MCC - Restaurantes/Alimentación
+  payload += tlv('53', '170');           // COP = 170
+  if (amountCOP > 0) {
+    payload += tlv('54', String(amountCOP));
+  }
+  payload += tlv('58', 'CO');            // País
+  payload += tlv('59', (merchantName || 'CASINO EGIPTO').substring(0, 25).toUpperCase());
+  payload += tlv('60', 'MEDELLIN');      // Ciudad
+  payload += '6304';                     // CRC placeholder
+
+  return payload + crc16CCITT(payload);
+}
+
+/**
+ * Para Nequi: el QR solo debe contener el número de celular de 10 dígitos.
+ * La app Nequi reconoce automáticamente este formato.
+ */
+function buildNequiQR(phoneNumber) {
+  return phoneNumber.replace(/[^0-9]/g, '').slice(0, 10);
+}
+
+// ── Modal de Pago ──────────────────────────────────────────────────────────
 
 function openPaymentModal() {
   const modal = document.getElementById('payment-modal');
@@ -634,30 +955,38 @@ function openPaymentModal() {
   document.getElementById('pay-bancolombia-num').innerText = STATE.bancolombiaNum;
   document.getElementById('pay-nequi-num').innerText = STATE.nequiNum || "No configurado";
 
-  // Safely render QR Codes using lib/qrcode.min.js
+  // QR Bancolombia — solo número de cuenta limpio (sin guiones)
+  // El QR EMVCo requiere validación online en los servidores de Bancolombia
+  // (solo disponible para comercios registrados). Para transferencias personales
+  // usamos el número de cuenta puro para que quien escanee lo use directamente.
   try {
     const qrBancolombiaBox = document.getElementById('qr-bancolombia-box');
-    if (qrBancolombiaBox) {
+    if (qrBancolombiaBox && window.QRCode) {
       qrBancolombiaBox.innerHTML = '';
-      const bNumClean = (STATE.bancolombiaNum || '838-567083-43').trim();
-      const bancolombiaPayload = `Bancolombia ${STATE.bancolombiaType} No ${bNumClean} - Valor $${grandTotal}`;
-      if (window.QRCode) {
-        new QRCode(qrBancolombiaBox, { text: bancolombiaPayload, width: 220, height: 220 });
-      }
+      const acctClean = (STATE.bancolombiaNum || '83856708343').replace(/[^0-9]/g, '');
+      new QRCode(qrBancolombiaBox, {
+        text: acctClean,
+        width: 220,
+        height: 220,
+        correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 0
+      });
     }
   } catch (err) {
     console.warn("Bancolombia QR render warning:", err);
   }
 
+  // QR Nequi (solo número de celular — reconocido por la app Nequi)
   try {
     const qrNequiBox = document.getElementById('qr-nequi-box');
-    if (qrNequiBox) {
+    if (qrNequiBox && window.QRCode) {
       qrNequiBox.innerHTML = '';
-      const nNumClean = (STATE.nequiNum || '3001234567').trim();
-      const nequiPayload = `Nequi No ${nNumClean} - Valor $${grandTotal}`;
-      if (window.QRCode) {
-        new QRCode(qrNequiBox, { text: nequiPayload, width: 220, height: 220 });
-      }
+      const nequiPayload = buildNequiQR(STATE.nequiNum || '3001234567');
+      new QRCode(qrNequiBox, {
+        text: nequiPayload,
+        width: 220,
+        height: 220,
+        correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.M : 0
+      });
     }
   } catch (err) {
     console.warn("Nequi QR render warning:", err);
@@ -705,17 +1034,33 @@ async function saveAccountFromUI(showNotification = true) {
     return false;
   }
   
+  // Guardar en Dexie y en localStorage como respaldo
+  let saved = false;
   try {
     await db.accounts.put(accountData);
+    saved = true;
+  } catch (e) {
+    console.warn("Dexie put account failed, guardando en localStorage:", e);
+  }
+
+  try {
+    const existing = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+    existing[accountData.id] = accountData;
+    localStorage.setItem('casino_egipto_accounts', JSON.stringify(existing));
+    saved = true;
+  } catch (errLocal) {
+    console.error("LocalStorage save failed:", errLocal);
+  }
+
+  if (saved) {
     STATE.isAccountStarted = true;
     updateAccountStatusUI();
     if (showNotification) {
       showToast("Cuenta del Casino guardada con éxito", "success", 2000);
     }
     return true;
-  } catch (e) {
-    console.error(e);
-    showToast("Error al guardar la cuenta: " + e.message, "error", 2500);
+  } else {
+    showToast("Error al guardar la cuenta", "error", 2500);
     return false;
   }
 }
@@ -723,15 +1068,32 @@ async function saveAccountFromUI(showNotification = true) {
 // --- 9. History View & Accordion Rendering ---
 async function renderHistoryList() {
   const container = document.getElementById('history-list');
+  if (!container) return;
   container.innerHTML = '';
   
-  const searchVal = document.getElementById('search-history').value.trim().toLowerCase();
-  let accountsArray = await db.accounts.toArray();
+  const searchVal = (document.getElementById('search-history')?.value || '').trim().toLowerCase();
+  let accountsArray = [];
+  
+  try {
+    accountsArray = await db.accounts.toArray();
+  } catch (e) {
+    console.warn("Error leyendo cuentas de Dexie:", e);
+  }
+
+  // Integrar cuentas respaldadas en localStorage
+  try {
+    const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+    Object.values(localAccounts).forEach(localAcc => {
+      if (!accountsArray.some(a => a.id === localAcc.id)) {
+        accountsArray.push(localAcc);
+      }
+    });
+  } catch (e) {}
   
   if (searchVal) {
     accountsArray = accountsArray.filter(a => 
-      a.clientName.toLowerCase().includes(searchVal) ||
-      a.id.toLowerCase().includes(searchVal)
+      (a.clientName && a.clientName.toLowerCase().includes(searchVal)) ||
+      (a.id && a.id.toLowerCase().includes(searchVal))
     );
   }
   
@@ -787,7 +1149,7 @@ async function renderHistoryList() {
         <div class="history-actions margin-top-12">
           <button class="btn btn-secondary btn-sm btn-edit-account" data-id="${account.id}">Cargar / Editar</button>
           <button class="btn btn-accent btn-sm btn-pdf-account" data-id="${account.id}">Generar Ticket</button>
-          <button class="btn btn-sm btn-email-account" data-id="${account.id}" style="background-color: #ea4335; color: #ffffff; border: none; font-weight: 500;">✉️ Correo</button>
+          <button class="btn btn-sm btn-email-account" data-id="${account.id}" style="background-color: #1877f2; color: #ffffff; border: none; font-weight: 600;">📊 Compartir</button>
           <button class="btn btn-danger btn-sm btn-delete-account" data-id="${account.id}">Eliminar</button>
         </div>
       </div>
@@ -846,7 +1208,14 @@ async function renderHistoryList() {
     
     card.querySelector('.btn-delete-account').addEventListener('click', async () => {
       if (confirm(`¿Eliminar la cuenta de ${account.clientName}?`)) {
-        await db.accounts.delete(account.id);
+        try {
+          await db.accounts.delete(account.id);
+        } catch (e) {}
+        try {
+          const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+          delete localAccounts[account.id];
+          localStorage.setItem('casino_egipto_accounts', JSON.stringify(localAccounts));
+        } catch (e) {}
         showToast("Cuenta eliminada", "info", 1500);
         renderHistoryList();
       }
@@ -857,6 +1226,86 @@ async function renderHistoryList() {
 }
 
 document.getElementById('search-history').addEventListener('input', renderHistoryList);
+
+// --- 10b. Dynamic Categories ---
+
+async function getCategories() {
+  try {
+    const setting = await db.settings.get('categories');
+    if (!setting || !setting.value) return DEFAULT_CATEGORIES;
+    const parsed = typeof setting.value === 'string' ? JSON.parse(setting.value) : setting.value;
+    return Array.isArray(parsed) ? parsed : DEFAULT_CATEGORIES;
+  } catch (e) {
+    console.error("Error obteniendo categorías:", e);
+    return DEFAULT_CATEGORIES;
+  }
+}
+
+async function saveCategories(cats) {
+  await db.settings.put({ key: 'categories', value: JSON.stringify(cats) });
+}
+
+async function renderCategoryTabs() {
+  const container = document.getElementById('category-tabs');
+  if (!container) return;
+  const cats = await getCategories();
+  
+  let html = `<button class="cat-btn ${STATE.currentCategory === 'todos' ? 'active' : ''}" data-cat="todos">Todos</button>`;
+  cats.forEach(cat => {
+    const isAct = STATE.currentCategory.toLowerCase() === cat.toLowerCase();
+    html += `<button class="cat-btn ${isAct ? 'active' : ''}" data-cat="${cat}">${cat}</button>`;
+  });
+  container.innerHTML = html;
+  
+  container.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      STATE.currentCategory = btn.getAttribute('data-cat');
+      renderMenuGrid();
+    });
+  });
+}
+
+async function populateCategorySelect() {
+  const sel = document.getElementById('new-item-cat');
+  if (!sel) return;
+  const cats = await getCategories();
+  const current = sel.value;
+  sel.innerHTML = cats.map(c => `<option value="${c}"${c === current ? ' selected' : ''}>${c}</option>`).join('');
+}
+
+async function renderCategoriesSettings() {
+  const container = document.getElementById('settings-categories-list');
+  if (!container) return;
+  const cats = await getCategories();
+  container.innerHTML = '';
+  cats.forEach((cat, idx) => {
+    const row = document.createElement('div');
+    row.className = 'settings-menu-item-row';
+    row.innerHTML = `
+      <span style="font-size:13px;color:#fff;font-weight:600;">🏷️ ${cat}</span>
+      <button class="btn btn-danger btn-sm btn-delete-cat" data-idx="${idx}" style="padding:4px 10px;font-size:12px;">Eliminar</button>
+    `;
+    row.querySelector('.btn-delete-cat').addEventListener('click', async () => {
+      // Verificar si hay items con esta categoría sin usar indices de BD
+      const allItems = await db.menuItems.toArray();
+      const count = allItems.filter(i => (i.category || '').toLowerCase() === cat.toLowerCase()).length;
+      if (count > 0) {
+        showToast(`⚠️ Hay ${count} producto(s) en "${cat}". Primero elimínalos o cámbialos.`, 'warning', 3000);
+        return;
+      }
+      const updated = cats.filter((_, i) => i !== idx);
+      await saveCategories(updated);
+      renderCategoriesSettings();
+      populateCategorySelect();
+      renderCategoryTabs();
+      renderMenuGrid();
+      showToast(`Categoría "${cat}" eliminada`, 'info', 1500);
+    });
+    container.appendChild(row);
+  });
+}
 
 // --- 10. Settings Menu Items List Rendering ---
 async function renderSettingsMenuList() {
@@ -898,6 +1347,15 @@ async function renderSettingsMenuList() {
       document.getElementById('btn-menu-item-text').innerText = 'Actualizar Producto';
       document.getElementById('btn-cancel-menu-edit').style.display = 'inline-block';
       
+      const previewContainer = document.getElementById('image-preview-container');
+      const previewEl = document.getElementById('image-preview');
+      const previewStatus = document.getElementById('image-preview-status');
+      if (item.img && previewEl && previewContainer) {
+        previewEl.src = item.img;
+        previewContainer.style.display = 'block';
+        if (previewStatus) previewStatus.innerText = `Imagen actual: ${item.img}`;
+      }
+
       document.getElementById('form-menu-item-title').scrollIntoView({ behavior: 'smooth' });
     });
     
