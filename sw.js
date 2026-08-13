@@ -1,4 +1,4 @@
-const CACHE_NAME = 'casino-egipto-v46';
+const CACHE_NAME = 'casino-egipto-v47';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,8 @@ const ASSETS = [
   './manifest.json',
   './app_icon_192.png',
   './app_icon_512.png',
+  './app_icon_maskable_192.png',
+  './app_icon_maskable_512.png',
   './lib/dexie.min.js',
   './lib/pdf-lib.min.js',
   './img/almuerzo.jpg',
