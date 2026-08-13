@@ -21,10 +21,10 @@
   <!-- Local Libraries for Offline Resilience -->
   <script src="lib/dexie.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
-  <script src="lib/qrcode.min.js"></script>
+  <script src="lib/qrcode.min.js?v=15"></script>
   
   <!-- Styling -->
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   
@@ -133,7 +133,7 @@
             <span class="btn-icon" id="btn-save-icon">🚀</span> <span id="btn-save-text">Iniciar Cuenta</span>
           </button>
           
-          <button id="btn-pay-modal" class="btn btn-pay-style btn-block margin-top-8">
+          <button id="btn-pay-modal" class="btn btn-pay-style btn-block margin-top-8" onclick="openPaymentModal();">
             <span class="btn-icon">💳</span> Pagar / Código QR
           </button>
 
@@ -326,14 +326,14 @@
   <div id="ticket-container" style="display: none;"></div>
 
   <!-- Payment & QR Modal Overlay -->
-  <div id="payment-modal" class="modal-overlay" style="display: none;">
+  <div id="payment-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closePaymentModal();">
     <div class="modal-card">
       <div class="modal-header">
         <div>
           <h3 class="modal-title">Pagar Consumo Casino</h3>
           <p class="modal-subtitle" id="payment-modal-amount-subtitle">Total a Pagar: $ 0</p>
         </div>
-        <button id="btn-close-payment-modal" class="modal-close-btn">✕</button>
+        <button id="btn-close-payment-modal" class="modal-close-btn" onclick="closePaymentModal();">✕</button>
       </div>
       
       <div class="payment-tabs">
@@ -386,6 +386,38 @@
     </div>
   </div>
 
-  <script src="app.js?v=5"></script>
+  <script>
+    function closePaymentModal() {
+      var modal = document.getElementById('payment-modal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.setProperty('display', 'none', 'important');
+      }
+    }
+    window.closePaymentModal = closePaymentModal;
+
+    function openPaymentModal() {
+      if (typeof window.triggerOpenPaymentModal === 'function') {
+        window.triggerOpenPaymentModal();
+      } else {
+        var modal = document.getElementById('payment-modal');
+        if (modal) {
+          modal.classList.add('open');
+          modal.style.setProperty('display', 'flex', 'important');
+        }
+      }
+    }
+    window.openPaymentModal = openPaymentModal;
+
+    // Force unregister stale PWA Service Workers to ensure instant cache refresh
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var reg of registrations) {
+          reg.unregister();
+        }
+      });
+    }
+  </script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

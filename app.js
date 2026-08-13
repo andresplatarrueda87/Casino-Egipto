@@ -601,15 +601,29 @@ function resetMenuItemForm() {
   document.getElementById('btn-cancel-menu-edit').style.display = 'none';
 }
 
-function openPaymentModal() {
-  const items = Object.values(STATE.cart);
-  const grandTotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+window.closePaymentModal = function() {
+  const modal = document.getElementById('payment-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.style.setProperty('display', 'none', 'important');
+  }
+};
 
-  if (items.length === 0 || grandTotal <= 0) {
-    showToast("Debe agregar consumos a la cuenta antes de abrir el pago", "warning", 2000);
-    return;
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closePaymentModal();
+  }
+});
+
+function openPaymentModal() {
+  const modal = document.getElementById('payment-modal');
+  if (modal) {
+    modal.classList.add('open');
+    modal.style.setProperty('display', 'flex', 'important');
   }
 
+  const items = Object.values(STATE.cart);
+  const grandTotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
   const formattedAmount = formatCurrency(grandTotal);
 
   document.getElementById('payment-modal-amount-subtitle').innerText = `Total a Pagar: ${formattedAmount}`;
@@ -620,23 +634,36 @@ function openPaymentModal() {
   document.getElementById('pay-bancolombia-num').innerText = STATE.bancolombiaNum;
   document.getElementById('pay-nequi-num').innerText = STATE.nequiNum || "No configurado";
 
-  // Render QR Codes using lib/qrcode.min.js
-  const qrBancolombiaBox = document.getElementById('qr-bancolombia-box');
-  qrBancolombiaBox.innerHTML = '';
-  const bancolombiaPayload = `BANCOLOMBIA|${STATE.bancolombiaType}|${STATE.bancolombiaNum}|VALOR:${grandTotal}`;
-  if (window.QRCode) {
-    new QRCode(qrBancolombiaBox, { text: bancolombiaPayload, width: 180, height: 180 });
+  // Safely render QR Codes using lib/qrcode.min.js
+  try {
+    const qrBancolombiaBox = document.getElementById('qr-bancolombia-box');
+    if (qrBancolombiaBox) {
+      qrBancolombiaBox.innerHTML = '';
+      const bNumClean = (STATE.bancolombiaNum || '838-567083-43').trim();
+      const bancolombiaPayload = `Bancolombia ${STATE.bancolombiaType} No ${bNumClean} - Valor $${grandTotal}`;
+      if (window.QRCode) {
+        new QRCode(qrBancolombiaBox, { text: bancolombiaPayload, width: 220, height: 220 });
+      }
+    }
+  } catch (err) {
+    console.warn("Bancolombia QR render warning:", err);
   }
 
-  const qrNequiBox = document.getElementById('qr-nequi-box');
-  qrNequiBox.innerHTML = '';
-  const nequiPayload = `NEQUI|${STATE.nequiNum}|VALOR:${grandTotal}`;
-  if (window.QRCode) {
-    new QRCode(qrNequiBox, { text: nequiPayload, width: 180, height: 180 });
+  try {
+    const qrNequiBox = document.getElementById('qr-nequi-box');
+    if (qrNequiBox) {
+      qrNequiBox.innerHTML = '';
+      const nNumClean = (STATE.nequiNum || '3001234567').trim();
+      const nequiPayload = `Nequi No ${nNumClean} - Valor $${grandTotal}`;
+      if (window.QRCode) {
+        new QRCode(qrNequiBox, { text: nequiPayload, width: 220, height: 220 });
+      }
+    }
+  } catch (err) {
+    console.warn("Nequi QR render warning:", err);
   }
-
-  document.getElementById('payment-modal').style.display = 'flex';
 }
+window.triggerOpenPaymentModal = openPaymentModal;
 
 function getAccountDataFromUI() {
   const clientName = STATE.userName || 'Usuario Casino';

@@ -1,13 +1,10 @@
 import http.server
-import socketserver
 import os
 import urllib.parse
+import sys
 
-PORT = 8085
-
-class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+class MyHandler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
-        # Strip query parameters and fragment IDs before translating path for Windows OS
         path = urllib.parse.unquote(path)
         path = path.split('?', 1)[0]
         path = path.split('#', 1)[0]
@@ -19,30 +16,14 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Expires', '0')
         super().end_headers()
 
-class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    daemon_threads = True
-    allow_reuse_address = True
-
 web_dir = os.path.dirname(os.path.realpath(__file__))
 os.chdir(web_dir)
 
-ports_to_try = [8085, 8088, 8090]
-httpd = None
-bound_port = None
+port = 8085
 
-for port in ports_to_try:
-    try:
-        httpd = ThreadingTCPServer(("0.0.0.0", port), MyHTTPRequestHandler)
-        bound_port = port
-        break
-    except OSError:
-        continue
-
-if httpd and bound_port:
-    print(f"Servidor Multihilo Casino Egipto corriendo en http://localhost:{bound_port}")
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nServidor detenido.")
-else:
-    print("Error: No se pudo iniciar el servidor en ninguno de los puertos especificados.")
+try:
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), MyHandler)
+    print(f"Servidor Casino Egipto corriendo en http://127.0.0.1:{port}", flush=True)
+    server.serve_forever()
+except Exception as e:
+    print(f"Error al iniciar servidor: {e}", flush=True)
