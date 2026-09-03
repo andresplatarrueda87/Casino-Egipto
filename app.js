@@ -1492,8 +1492,6 @@ function getAccountDataFromUI(status = 'abierta') {
   const total = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
   const totalQty = items.reduce((sum, i) => sum + i.qty, 0);
   
-  const now = new Date();
-  
   return {
     id: STATE.activeAccountId || `CUENTA-${now.getTime()}`,
     clientName: clientName,
