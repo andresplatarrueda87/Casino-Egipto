@@ -93,17 +93,19 @@
         <!-- Account Info Card -->
         <div class="card account-info-card">
           <div class="account-user-header">
-            <div class="account-user-details">
-              <span class="user-avatar-icon">👤</span>
-              <div>
+            <!-- Fila superior: Usuario y Estado -->
+            <div class="account-user-top">
+              <div class="account-user-details">
+                <span class="user-avatar-icon">👤</span>
                 <h3 class="user-name-title" id="cuenta-user-display">Andres Platarrueda</h3>
-                <div class="account-id-chip" id="cuenta-id-chip" style="margin-top: 3px;">
-                  <span class="id-label">ID Cuenta:</span>
-                  <span class="id-val" id="cuenta-id-display">Cargando...</span>
-                </div>
               </div>
+              <span class="account-status-badge" id="cuenta-status-badge">Cuenta Abierta</span>
             </div>
-            <span class="account-status-badge" id="cuenta-status-badge">Cuenta Abierta</span>
+            <!-- Fila inferior: ID Cuenta que ocupa el espacio hasta el borde derecho -->
+            <div class="account-id-chip full-width" id="cuenta-id-chip">
+              <span class="id-label">ID Cuenta:</span>
+              <span class="id-val" id="cuenta-id-display">Cargando...</span>
+            </div>
           </div>
           
           <div class="form-row margin-top-12">
@@ -135,22 +137,19 @@
           </div>
         </div>
 
-        <!-- Account Log / Bitácora Card -->
+        <!-- Account Log / Bitácora Card (Botón Ver Bitácora sin cortar espacio) -->
         <div class="card account-bitacora-card">
-          <div class="bitacora-header-toggle" id="btn-toggle-bitacora" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">📋</span>
-              <h3 class="card-title" style="margin-bottom: 0;">Bitácora de la Cuenta</h3>
-              <span class="badge-count" id="bitacora-count-badge" style="font-size: 11px; padding: 2px 7px; background: rgba(59, 174, 42, 0.2); color: var(--color-primary); border-radius: 10px; font-weight: 700;">0 registros</span>
+          <div class="bitacora-header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">📋</span>
+              <div>
+                <h3 class="card-title" style="margin-bottom: 2px; font-size: 14.5px;">Bitácora de la Cuenta</h3>
+                <span class="badge-count" id="bitacora-count-badge" style="font-size: 11.5px; color: var(--text-secondary); font-weight: 600;">0 movimientos</span>
+              </div>
             </div>
-            <button type="button" class="btn btn-text btn-sm" style="padding: 2px 6px; font-size: 13px; color: var(--color-primary); font-weight: 700; background: none; border: none;">
-              <span id="bitacora-toggle-icon">▼</span>
+            <button type="button" id="btn-open-bitacora-modal" class="btn btn-secondary btn-sm" style="font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-color: rgba(59, 174, 42, 0.4); color: var(--color-primary); white-space: nowrap;">
+              <span>👁️</span> <span>Ver Bitácora</span>
             </button>
-          </div>
-          <div id="bitacora-content" class="bitacora-content" style="display: block; margin-top: 12px;">
-            <div id="cart-bitacora-container" class="bitacora-list">
-              <!-- Populated dynamically by app.js -->
-            </div>
           </div>
         </div>
         
@@ -549,6 +548,34 @@
     </div>
   </div>
 
+  <!-- Bitácora Modal Overlay (Visualización amplia sin cortar la vista de la cuenta) -->
+  <div id="bitacora-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeBitacoraModal();">
+    <div class="modal-card modal-bitacora-card" style="max-width: 520px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="margin-bottom: 12px;">
+        <div>
+          <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+            <span>📋</span> Bitácora de Movimientos
+          </h3>
+          <p class="modal-subtitle" id="bitacora-modal-subtitle">Cuenta: CTA · 0 movimientos</p>
+        </div>
+        <button id="btn-close-bitacora-modal" class="modal-close-btn" onclick="closeBitacoraModal();">✕</button>
+      </div>
+      
+      <div id="modal-bitacora-list-container" class="bitacora-list" style="flex: 1; overflow-y: auto; max-height: 52vh; padding-right: 4px; margin-bottom: 16px;">
+        <!-- Llenado dinámicamente -->
+      </div>
+      
+      <div class="modal-actions-grid" style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-secondary flex-1" onclick="closeBitacoraModal();">
+          Cerrar
+        </button>
+        <button type="button" class="btn btn-sm btn-accent flex-1" id="btn-modal-share-bitacora" style="background-color: #059669; color: #ffffff; font-weight: 700;">
+          📋 Compartir con Bitácora
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
 
     function closePaymentModal() {
@@ -572,7 +599,29 @@
       }
     }
     window.openPaymentModal = openPaymentModal;
+
+    function closeBitacoraModal() {
+      var modal = document.getElementById('bitacora-modal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.setProperty('display', 'none', 'important');
+      }
+    }
+    window.closeBitacoraModal = closeBitacoraModal;
+
+    function openBitacoraModal(accountData) {
+      if (typeof window.triggerOpenBitacoraModal === 'function') {
+        window.triggerOpenBitacoraModal(accountData);
+      } else {
+        var modal = document.getElementById('bitacora-modal');
+        if (modal) {
+          modal.classList.add('open');
+          modal.style.setProperty('display', 'flex', 'important');
+        }
+      }
+    }
+    window.openBitacoraModal = openBitacoraModal;
   </script>
-  <script src="app.js?v=53"></script>
+  <script src="app.js?v=56"></script>
 </body>
 </html>

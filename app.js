@@ -246,31 +246,18 @@ function addBitacoraEntry(action, itemName = '', qtyChange = 0, currentQty = 0, 
   return entry;
 }
 
-// Renderizado de la lista de bitácora en la pestaña Cuenta
-function renderCartBitacoraUI() {
-  const container = document.getElementById('cart-bitacora-container');
-  const countBadge = document.getElementById('bitacora-count-badge');
-  if (!container) return;
-  
-  const list = STATE.bitacora || [];
-  if (countBadge) {
-    countBadge.innerText = `${list.length} movimiento${list.length === 1 ? '' : 's'}`;
-  }
-  
-  if (list.length === 0) {
-    container.innerHTML = `
-      <div class="bitacora-empty">
-        <p>No hay movimientos registrados en esta cuenta aún.</p>
+// Generador HTML reutilizable para las entradas de bitácora
+function renderBitacoraListHtml(list) {
+  if (!list || list.length === 0) {
+    return `
+      <div class="bitacora-empty" style="text-align: center; padding: 30px 15px; color: var(--text-secondary);">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">📋</span>
+        <p style="font-size: 13.5px; margin: 0;">No hay movimientos registrados en esta cuenta aún.</p>
       </div>
     `;
-    return;
   }
   
-  container.innerHTML = '';
-  list.forEach(entry => {
-    const row = document.createElement('div');
-    row.className = 'bitacora-entry';
-    
+  return list.map(entry => {
     let badgeClass = 'badge-add';
     let badgeText = '+1';
     
@@ -294,16 +281,70 @@ function renderCartBitacoraUI() {
       badgeText = '🏁 Cierre';
     }
 
-    row.innerHTML = `
-      <div class="bitacora-left">
-        <span class="bitacora-badge ${badgeClass}">${badgeText}</span>
-        <span class="bitacora-desc" title="${entry.description}">${entry.description}</span>
+    return `
+      <div class="bitacora-entry" style="padding: 7px 10px; margin-bottom: 6px;">
+        <div class="bitacora-left">
+          <span class="bitacora-badge ${badgeClass}">${badgeText}</span>
+          <span class="bitacora-desc" title="${entry.description}">${entry.description}</span>
+        </div>
+        <span class="bitacora-time" style="font-size: 10px;">${entry.timeFormatted}</span>
       </div>
-      <span class="bitacora-time">${entry.timeFormatted}</span>
     `;
-    container.appendChild(row);
-  });
+  }).join('');
 }
+
+// Actualiza el contador de bitácora en la tarjeta de Cuenta y refresca el modal si está abierto
+function renderCartBitacoraUI() {
+  const countBadge = document.getElementById('bitacora-count-badge');
+  const list = STATE.bitacora || [];
+  if (countBadge) {
+    countBadge.innerText = `${list.length} movimiento${list.length === 1 ? '' : 's'}`;
+  }
+
+  // Si el modal de bitácora está abierto con la cuenta activa, refrescarlo en vivo
+  const modal = document.getElementById('bitacora-modal');
+  if (modal && (modal.classList.contains('open') || modal.style.display === 'flex')) {
+    const container = document.getElementById('modal-bitacora-list-container');
+    const subtitle = document.getElementById('bitacora-modal-subtitle');
+    if (container) {
+      container.innerHTML = renderBitacoraListHtml(list);
+    }
+    if (subtitle) {
+      subtitle.innerText = `Cuenta: ${STATE.activeAccountId || 'CTA'} · ${list.length} movimiento${list.length === 1 ? '' : 's'}`;
+    }
+  }
+}
+
+// Abre el modal de visualización amplia de bitácora
+function triggerOpenBitacoraModal(accountData = null) {
+  const modal = document.getElementById('bitacora-modal');
+  const subtitle = document.getElementById('bitacora-modal-subtitle');
+  const container = document.getElementById('modal-bitacora-list-container');
+  const shareBtn = document.getElementById('btn-modal-share-bitacora');
+  if (!modal) return;
+
+  const targetAcc = accountData || getAccountDataFromUI();
+  const list = (targetAcc && Array.isArray(targetAcc.bitacora)) ? targetAcc.bitacora : (STATE.bitacora || []);
+  const accId = (targetAcc && targetAcc.id) ? targetAcc.id : (STATE.activeAccountId || 'CTA');
+  
+  if (subtitle) {
+    subtitle.innerText = `Cuenta: ${accId} · ${list.length} movimiento${list.length === 1 ? '' : 's'}`;
+  }
+  
+  if (container) {
+    container.innerHTML = renderBitacoraListHtml(list);
+  }
+  
+  if (shareBtn) {
+    shareBtn.onclick = () => {
+      sendAccountByEmail(targetAcc, true);
+    };
+  }
+
+  modal.classList.add('open');
+  modal.style.setProperty('display', 'flex', 'important');
+}
+window.triggerOpenBitacoraModal = triggerOpenBitacoraModal;
 
 // Auto-persistencia en tiempo real de la cuenta activa
 async function autoPersistActiveAccount() {
@@ -918,17 +959,11 @@ function setupEventListeners() {
     await saveAccountFromUI(true);
   });
 
-  // Toggle collapse/expand bitácora in Cuenta
-  const bitacoraToggle = document.getElementById('btn-toggle-bitacora');
-  if (bitacoraToggle) {
-    bitacoraToggle.addEventListener('click', () => {
-      const content = document.getElementById('bitacora-content');
-      const icon = document.getElementById('bitacora-toggle-icon');
-      if (content) {
-        const isHidden = content.style.display === 'none';
-        content.style.display = isHidden ? 'block' : 'none';
-        if (icon) icon.innerText = isHidden ? '▼' : '▲';
-      }
+  // Abrir Modal de Bitácora desde la tarjeta de Cuenta
+  const btnOpenBitacora = document.getElementById('btn-open-bitacora-modal');
+  if (btnOpenBitacora) {
+    btnOpenBitacora.addEventListener('click', () => {
+      openBitacoraModal();
     });
   }
 
@@ -1583,36 +1618,14 @@ async function renderHistoryList() {
     const bitacoraHtml = bitacoraList.length > 0
       ? `
         <div class="history-bitacora-section">
-          <div class="history-bitacora-toggle-bar" style="margin-bottom: 6px;">
+          <div class="history-bitacora-toggle-bar" style="margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 11.5px; font-weight: 700; color: var(--color-primary); text-transform: uppercase;">📋 Bitácora (${bitacoraList.length} registros)</span>
+            <button type="button" class="btn btn-text btn-sm btn-open-hist-bitacora" data-id="${account.id}" style="font-size: 11px; color: var(--color-primary); font-weight: 700; padding: 1px 6px; background: none; border: none; cursor: pointer;">
+              👁️ Ver en Pantalla Completa
+            </button>
           </div>
           <div class="bitacora-list" style="max-height: 160px;">
-            ${bitacoraList.map(entry => {
-              let bClass = 'badge-add';
-              let bText = '+1';
-              if (entry.action === 'AGREGAR' || (entry.qtyChange > 0 && entry.action !== 'SUMAR')) {
-                bClass = 'badge-add'; bText = `+${entry.qtyChange || 1}`;
-              } else if (entry.action === 'SUMAR') {
-                bClass = 'badge-add'; bText = `+${entry.qtyChange || 1}`;
-              } else if (entry.action === 'RESTAR') {
-                bClass = 'badge-sub'; bText = `${entry.qtyChange}`;
-              } else if (entry.action === 'ELIMINAR') {
-                bClass = 'badge-del'; bText = '✕ Borró';
-              } else if (entry.action === 'INICIO') {
-                bClass = 'badge-init'; bText = '🚀 Inicio';
-              } else if (entry.action === 'CIERRE') {
-                bClass = 'badge-close'; bText = '🏁 Cierre';
-              }
-              return `
-                <div class="bitacora-entry" style="padding: 5px 8px; font-size: 11.5px;">
-                  <div class="bitacora-left">
-                    <span class="bitacora-badge ${bClass}" style="font-size: 9.5px; padding: 1px 5px;">${bText}</span>
-                    <span class="bitacora-desc" style="font-size: 11.5px;">${entry.description}</span>
-                  </div>
-                  <span class="bitacora-time" style="font-size: 9.5px;">${entry.timeFormatted}</span>
-                </div>
-              `;
-            }).join('')}
+            ${renderBitacoraListHtml(bitacoraList)}
           </div>
         </div>
       `
@@ -1705,6 +1718,14 @@ async function renderHistoryList() {
     card.querySelector('.btn-email-account').addEventListener('click', () => {
       sendAccountByEmail(account, false);
     });
+
+    const btnHistBitacora = card.querySelector('.btn-open-hist-bitacora');
+    if (btnHistBitacora) {
+      btnHistBitacora.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBitacoraModal(account);
+      });
+    }
 
     const btnShareBitacora = card.querySelector('.btn-share-bitacora-account');
     if (btnShareBitacora) {
