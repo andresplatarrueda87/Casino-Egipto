@@ -1139,3 +1139,131 @@ label {
 .btn-email-main-style:hover {
   background-color: #166fe5 !important;
 }
+
+/* ==========================================================================
+   BITÁCORA DE MOVIMIENTOS Y ACCIONES DE CUENTA
+   ========================================================================== */
+.account-bitacora-card {
+  margin-top: 14px;
+}
+
+.bitacora-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bitacora-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.bitacora-list::-webkit-scrollbar-thumb {
+  background: var(--card-border);
+  border-radius: 4px;
+}
+
+.bitacora-entry {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  transition: background-color 0.15s ease;
+}
+
+.bitacora-entry:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bitacora-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.bitacora-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+.bitacora-badge.badge-add {
+  background: rgba(59, 174, 42, 0.18);
+  color: #4ade80;
+  border: 1px solid rgba(59, 174, 42, 0.4);
+}
+
+.bitacora-badge.badge-sub {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.bitacora-badge.badge-del {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.bitacora-badge.badge-init {
+  background: rgba(37, 99, 235, 0.18);
+  color: #60a5fa;
+  border: 1px solid rgba(37, 99, 235, 0.4);
+}
+
+.bitacora-badge.badge-close {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.bitacora-desc {
+  color: #ffffff;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitacora-time {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.bitacora-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 16px 8px;
+  font-size: 12px;
+}
+
+.history-bitacora-section {
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.history-bitacora-toggle-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+

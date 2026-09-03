@@ -40,6 +40,7 @@ const DEFAULT_NEQUI_NUM = "3001234567";
 const STATE = {
   activeAccountId: null,
   cart: {}, // Maps itemId -> { id, name, price, qty, img, category }
+  bitacora: [], // Array of action logs: { id, timestamp, timeFormatted, action, itemName, qtyChange, currentQty, description }
   currentCategory: 'todos',
   userName: DEFAULT_USER_NAME,
   bancolombiaNum: DEFAULT_BANCOLOMBIA_NUM,
@@ -139,6 +140,210 @@ function formatDateTimeShort(date) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+// Formato legible con fecha y hora para la bitácora
+function formatActionDateTime(date) {
+  const d = date ? (date instanceof Date ? date : new Date(date)) : new Date();
+  const pad = num => String(num).padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${day}/${month}/${year} ${pad(hours)}:${minutes}:${seconds} ${ampm}`;
+}
+
+// Registro de movimientos en la Bitácora de la Cuenta
+function addBitacoraEntry(action, itemName = '', qtyChange = 0, currentQty = 0, customNote = '') {
+  if (!STATE.bitacora) STATE.bitacora = [];
+  const now = new Date();
+  
+  let desc = '';
+  if (action === 'AGREGAR') {
+    desc = `Agregó ${qtyChange > 0 ? '+' : ''}${qtyChange} ${itemName}`;
+  } else if (action === 'SUMAR') {
+    desc = `Aumentó a ${currentQty}x ${itemName} (+${qtyChange})`;
+  } else if (action === 'RESTAR') {
+    desc = currentQty > 0 ? `Disminuyó a ${currentQty}x ${itemName} (${qtyChange})` : `Restó último ${itemName}`;
+  } else if (action === 'ELIMINAR') {
+    desc = `Eliminó ${itemName} de la cuenta`;
+  } else if (action === 'INICIO') {
+    desc = customNote || 'Cuenta iniciada';
+  } else if (action === 'CIERRE') {
+    desc = customNote || 'Cuenta finalizada y guardada como cerrada';
+  } else {
+    desc = customNote || `${action}: ${itemName || ''}`;
+  }
+
+  const entry = {
+    id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    timestamp: now.getTime(),
+    timeFormatted: formatActionDateTime(now),
+    action: action,
+    itemName: itemName || '',
+    qtyChange: qtyChange,
+    currentQty: currentQty,
+    description: desc
+  };
+
+  STATE.bitacora.unshift(entry);
+  renderCartBitacoraUI();
+  autoPersistActiveAccount();
+  return entry;
+}
+
+// Renderizado de la lista de bitácora en la pestaña Cuenta
+function renderCartBitacoraUI() {
+  const container = document.getElementById('cart-bitacora-container');
+  const countBadge = document.getElementById('bitacora-count-badge');
+  if (!container) return;
+  
+  const list = STATE.bitacora || [];
+  if (countBadge) {
+    countBadge.innerText = `${list.length} movimiento${list.length === 1 ? '' : 's'}`;
+  }
+  
+  if (list.length === 0) {
+    container.innerHTML = `
+      <div class="bitacora-empty">
+        <p>No hay movimientos registrados en esta cuenta aún.</p>
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML = '';
+  list.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = 'bitacora-entry';
+    
+    let badgeClass = 'badge-add';
+    let badgeText = '+1';
+    
+    if (entry.action === 'AGREGAR' || (entry.qtyChange > 0 && entry.action !== 'SUMAR')) {
+      badgeClass = 'badge-add';
+      badgeText = `+${entry.qtyChange || 1}`;
+    } else if (entry.action === 'SUMAR') {
+      badgeClass = 'badge-add';
+      badgeText = `+${entry.qtyChange || 1}`;
+    } else if (entry.action === 'RESTAR') {
+      badgeClass = 'badge-sub';
+      badgeText = `${entry.qtyChange}`;
+    } else if (entry.action === 'ELIMINAR') {
+      badgeClass = 'badge-del';
+      badgeText = '✕ Borró';
+    } else if (entry.action === 'INICIO') {
+      badgeClass = 'badge-init';
+      badgeText = '🚀 Inicio';
+    } else if (entry.action === 'CIERRE') {
+      badgeClass = 'badge-close';
+      badgeText = '🏁 Cierre';
+    }
+
+    row.innerHTML = `
+      <div class="bitacora-left">
+        <span class="bitacora-badge ${badgeClass}">${badgeText}</span>
+        <span class="bitacora-desc" title="${entry.description}">${entry.description}</span>
+      </div>
+      <span class="bitacora-time">${entry.timeFormatted}</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// Auto-persistencia en tiempo real de la cuenta activa
+async function autoPersistActiveAccount() {
+  const hasCart = Object.keys(STATE.cart).length > 0;
+  if (!STATE.isAccountStarted && !hasCart) return;
+  
+  const accountData = getAccountDataFromUI('abierta');
+  accountData.bitacora = STATE.bitacora || [];
+  
+  try {
+    await db.accounts.put(accountData);
+  } catch (e) {
+    console.warn("Auto-persist Dexie failed:", e);
+  }
+  
+  try {
+    const existing = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+    existing[accountData.id] = accountData;
+    localStorage.setItem('casino_egipto_accounts', JSON.stringify(existing));
+  } catch (e) {}
+}
+
+// Carga una cuenta en el estado activo
+function loadAccountIntoState(account) {
+  STATE.activeAccountId = account.id || `CUENTA-${Date.now()}`;
+  STATE.cart = {};
+  STATE.isAccountStarted = true;
+  STATE.bitacora = Array.isArray(account.bitacora) ? [...account.bitacora] : [];
+  
+  if (account.items && Array.isArray(account.items)) {
+    account.items.forEach(i => {
+      STATE.cart[i.id] = { ...i };
+    });
+  }
+  
+  STATE.dateStart = account.dateStart ? parseLocalDate(account.dateStart) : new Date();
+  STATE.dateEnd = account.dateEnd ? parseLocalDate(account.dateEnd) : new Date();
+  
+  const startEl = document.getElementById('cuenta-fecha-inicio');
+  const finEl = document.getElementById('cuenta-fecha-fin');
+  if (startEl) startEl.value = formatDateTimeISO(STATE.dateStart);
+  if (finEl) finEl.value = formatDateTimeISO(STATE.dateEnd);
+  
+  updateAccountStatusUI();
+  updateCartNavBadge();
+  renderCartView();
+  renderCartBitacoraUI();
+}
+
+// Carga automática de cuenta activa al iniciar la aplicación
+async function loadActiveAccountOnStartup() {
+  let openAccount = null;
+  
+  try {
+    const accounts = await db.accounts.toArray();
+    const openAccounts = accounts.filter(a => a.status === 'abierta');
+    if (openAccounts.length > 0) {
+      openAccounts.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
+        return timeB - timeA;
+      });
+      openAccount = openAccounts[0];
+    }
+  } catch (e) {
+    console.warn("Error leyendo cuentas en startup desde Dexie:", e);
+  }
+  
+  if (!openAccount) {
+    try {
+      const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+      const openLocals = Object.values(localAccounts).filter(a => a && a.status === 'abierta');
+      if (openLocals.length > 0) {
+        openLocals.sort((a, b) => {
+          const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
+          return timeB - timeA;
+        });
+        openAccount = openLocals[0];
+      }
+    } catch (e) {}
+  }
+  
+  if (openAccount) {
+    loadAccountIntoState(openAccount);
+    console.log("✅ Cuenta activa cargada automáticamente:", openAccount.id);
+  } else {
+    initNewAccountState();
+  }
+}
+
 // --- 4. DOM Initialization ---
 async function initApp() {
   registerServiceWorker();
@@ -181,10 +386,18 @@ async function initApp() {
     console.error("Error preparando categorías:", e);
   }
   
-  initNewAccountState();
+  // Cargar cuenta activa si existe en la base de datos o iniciar nueva
+  try {
+    await loadActiveAccountOnStartup();
+  } catch (e) {
+    console.error("Error cargando cuenta activa:", e);
+    initNewAccountState();
+  }
+
   try {
     await renderMenuGrid();
     await renderCartView();
+    renderCartBitacoraUI();
   } catch (e) {
     console.error("Error renderizando menú/carrito:", e);
   }
@@ -292,6 +505,7 @@ function initNewAccountState() {
   const now = new Date();
   STATE.activeAccountId = `CUENTA-${now.getTime()}`;
   STATE.cart = {};
+  STATE.bitacora = [];
   STATE.isAccountStarted = false;
   STATE.dateStart = now;
   STATE.dateEnd = now;
@@ -303,6 +517,7 @@ function initNewAccountState() {
   
   updateAccountStatusUI();
   updateCartNavBadge();
+  renderCartBitacoraUI();
 }
 
 // --- 5. Navigation ---
@@ -431,10 +646,21 @@ async function renderMenuGrid() {
 }
 
 function addToCart(item) {
+  const wasStarted = STATE.isAccountStarted || Object.keys(STATE.cart).length > 0;
   STATE.isAccountStarted = true;
+  
+  const now = new Date();
+  STATE.dateEnd = now;
+  const finEl = document.getElementById('cuenta-fecha-fin');
+  if (finEl) finEl.value = formatDateTimeISO(now);
+
+  if (!wasStarted && (!STATE.bitacora || STATE.bitacora.length === 0)) {
+    addBitacoraEntry('INICIO', null, 0, 0, 'Cuenta iniciada');
+  }
   
   if (STATE.cart[item.id]) {
     STATE.cart[item.id].qty += 1;
+    addBitacoraEntry('SUMAR', item.name, 1, STATE.cart[item.id].qty);
   } else {
     // Snapshot current item price and data
     STATE.cart[item.id] = {
@@ -445,12 +671,15 @@ function addToCart(item) {
       img: item.img,
       category: item.category
     };
+    addBitacoraEntry('AGREGAR', item.name, 1, 1);
   }
   
   const currentQty = STATE.cart[item.id].qty;
   showToast(`+1 ${item.name} agregado (${currentQty})`, 'success', 1200);
   updateAccountStatusUI();
   updateCartNavBadge();
+  renderCartBitacoraUI();
+  autoPersistActiveAccount();
   
   // Actualizar solo el botón de la tarjeta correspondiente sin recrear el DOM ni mover el scroll
   document.querySelectorAll(`.btn-add-to-cart[data-id="${item.id}"]`).forEach(btn => {
@@ -525,26 +754,37 @@ function renderCartView() {
     row.querySelector('.btn-qty-minus').addEventListener('click', () => {
       if (STATE.cart[item.id].qty > 1) {
         STATE.cart[item.id].qty -= 1;
+        addBitacoraEntry('RESTAR', item.name, -1, STATE.cart[item.id].qty);
       } else {
         delete STATE.cart[item.id];
+        addBitacoraEntry('ELIMINAR', item.name, -1, 0);
       }
       updateCartNavBadge();
       renderCartView();
       renderMenuGrid();
+      renderCartBitacoraUI();
+      autoPersistActiveAccount();
     });
     
     row.querySelector('.btn-qty-plus').addEventListener('click', () => {
       STATE.cart[item.id].qty += 1;
+      addBitacoraEntry('SUMAR', item.name, 1, STATE.cart[item.id].qty);
       updateCartNavBadge();
       renderCartView();
       renderMenuGrid();
+      renderCartBitacoraUI();
+      autoPersistActiveAccount();
     });
     
     row.querySelector('.btn-remove-item').addEventListener('click', () => {
+      const prevQty = STATE.cart[item.id].qty;
       delete STATE.cart[item.id];
+      addBitacoraEntry('ELIMINAR', item.name, -prevQty, 0);
       updateCartNavBadge();
       renderCartView();
       renderMenuGrid();
+      renderCartBitacoraUI();
+      autoPersistActiveAccount();
     });
     
     container.appendChild(row);
@@ -573,6 +813,7 @@ function setupEventListeners() {
     const isStarted = STATE.isAccountStarted || Object.keys(STATE.cart).length > 0;
     if (!isStarted) {
       STATE.isAccountStarted = true;
+      addBitacoraEntry('INICIO', null, 0, 0, 'Cuenta iniciada');
       updateAccountStatusUI();
       showToast("Cuenta iniciada. Agrega tus consumos desde el Menú.", "info", 2000);
       document.querySelector('.nav-btn[data-target="panel-menu"]').click();
@@ -581,6 +822,20 @@ function setupEventListeners() {
     
     await saveAccountFromUI(true);
   });
+
+  // Toggle collapse/expand bitácora in Cuenta
+  const bitacoraToggle = document.getElementById('btn-toggle-bitacora');
+  if (bitacoraToggle) {
+    bitacoraToggle.addEventListener('click', () => {
+      const content = document.getElementById('bitacora-content');
+      const icon = document.getElementById('bitacora-toggle-icon');
+      if (content) {
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? 'block' : 'none';
+        if (icon) icon.innerText = isHidden ? '▼' : '▲';
+      }
+    });
+  }
 
   // Toggle collapse/expand bottom actions in Cuenta
   const toggleBtn = document.getElementById('btn-toggle-bottom-actions');
@@ -635,7 +890,8 @@ function setupEventListeners() {
     }
     
     if (confirm("¿Desea finalizar y cerrar la cuenta actual? Se guardará como CERRADA en el histórico y el botón volverá a Iniciar Cuenta.")) {
-      if (cartItemsCount > 0) {
+      addBitacoraEntry('CIERRE', null, 0, 0, 'Cuenta finalizada y guardada como cerrada');
+      if (cartItemsCount > 0 || (STATE.bitacora && STATE.bitacora.length > 0)) {
         await saveAccountFromUI(false, 'cerrada');
       }
       initNewAccountState();
@@ -1082,6 +1338,7 @@ function getAccountDataFromUI(status = 'abierta') {
     dateStart: dateStart || formatDateTimeISO(now),
     dateEnd: dateEnd || formatDateTimeISO(now),
     items: items,
+    bitacora: Array.isArray(STATE.bitacora) ? [...STATE.bitacora] : [],
     total: total,
     totalQty: totalQty,
     updatedAt: now.toISOString()
@@ -1211,6 +1468,45 @@ async function renderHistoryList() {
       ? `<button class="btn btn-pay-style btn-sm btn-pay-account" data-id="${account.id}" style="padding: 4px 10px; font-size: 12px;">💳 Pagar</button>`
       : '';
 
+    const bitacoraList = Array.isArray(account.bitacora) ? account.bitacora : [];
+    const bitacoraHtml = bitacoraList.length > 0
+      ? `
+        <div class="history-bitacora-section">
+          <div class="history-bitacora-toggle-bar" style="margin-bottom: 6px;">
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--color-primary); text-transform: uppercase;">📋 Bitácora (${bitacoraList.length} registros)</span>
+          </div>
+          <div class="bitacora-list" style="max-height: 160px;">
+            ${bitacoraList.map(entry => {
+              let bClass = 'badge-add';
+              let bText = '+1';
+              if (entry.action === 'AGREGAR' || (entry.qtyChange > 0 && entry.action !== 'SUMAR')) {
+                bClass = 'badge-add'; bText = `+${entry.qtyChange || 1}`;
+              } else if (entry.action === 'SUMAR') {
+                bClass = 'badge-add'; bText = `+${entry.qtyChange || 1}`;
+              } else if (entry.action === 'RESTAR') {
+                bClass = 'badge-sub'; bText = `${entry.qtyChange}`;
+              } else if (entry.action === 'ELIMINAR') {
+                bClass = 'badge-del'; bText = '✕ Borró';
+              } else if (entry.action === 'INICIO') {
+                bClass = 'badge-init'; bText = '🚀 Inicio';
+              } else if (entry.action === 'CIERRE') {
+                bClass = 'badge-close'; bText = '🏁 Cierre';
+              }
+              return `
+                <div class="bitacora-entry" style="padding: 5px 8px; font-size: 11.5px;">
+                  <div class="bitacora-left">
+                    <span class="bitacora-badge ${bClass}" style="font-size: 9.5px; padding: 1px 5px;">${bText}</span>
+                    <span class="bitacora-desc" style="font-size: 11.5px;">${entry.description}</span>
+                  </div>
+                  <span class="bitacora-time" style="font-size: 9.5px;">${entry.timeFormatted}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `
+      : '';
+
     card.innerHTML = `
       <div class="history-header">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -1234,6 +1530,7 @@ async function renderHistoryList() {
           <span class="detail-badge">Productos (${account.totalQty || 0}): ${itemsSummaryText}</span>
           <span class="detail-badge" style="border-color: rgba(59, 174, 42, 0.4); color: var(--color-primary);">🕒 Guardado: ${formatDateTimeShort(account.updatedAt)}</span>
         </div>
+        ${bitacoraHtml}
         <div class="history-actions margin-top-12">
           ${payButtonHtml}
           <button class="btn btn-secondary btn-sm btn-edit-account" data-id="${account.id}">Cargar / Editar</button>
@@ -1264,25 +1561,7 @@ async function renderHistoryList() {
     });
     
     card.querySelector('.btn-edit-account').addEventListener('click', () => {
-      STATE.activeAccountId = account.id;
-      STATE.cart = {};
-      STATE.isAccountStarted = true;
-      if (account.items) {
-        account.items.forEach(i => {
-          // Keep historical price when loading
-          STATE.cart[i.id] = { ...i };
-        });
-      }
-      
-      const startEl = document.getElementById('cuenta-fecha-inicio');
-      const finEl = document.getElementById('cuenta-fecha-fin');
-      if (startEl) startEl.value = account.dateStart || '';
-      if (finEl) finEl.value = account.dateEnd || '';
-      
-      updateAccountStatusUI();
-      updateCartNavBadge();
-      renderCartView();
-      
+      loadAccountIntoState(account);
       document.querySelector('.nav-btn[data-target="panel-cuenta"]').click();
       showToast("Cuenta cargada para edición", "info", 1800);
     });
@@ -1614,71 +1893,287 @@ async function sendAccountByEmail(accountData) {
   }
 }
 
-// --- 13. Backup Export / Import ---
-function setupBackupHandlers() {
-  document.getElementById('btn-export-db').addEventListener('click', async () => {
-    const dbData = {
-      menuItems: await db.menuItems.toArray(),
-      accounts: await db.accounts.toArray(),
-      settings: await db.settings.toArray()
+// --- 13. Separated Backup Handlers (Menu vs Accounts) ---
+
+// Convierte cualquier ruta de imagen o URL a Base64 DataURL para que sea 100% autónoma en el JSON
+async function imageToDataUrl(url) {
+  if (!url) return 'img/almuerzo.jpg';
+  if (url.startsWith('data:image/')) return url;
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        let w = img.naturalWidth || img.width || 300;
+        let h = img.naturalHeight || img.height || 300;
+        
+        // Optimizar tamaño máximo a 600px para mantener el JSON ágil
+        const maxDim = 600;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(dataUrl);
+      } catch (err) {
+        console.warn("No se pudo convertir imagen a Base64, manteniendo URL original:", err);
+        resolve(url);
+      }
     };
-    
-    const blob = new Blob([JSON.stringify(dbData, null, 2)], { type: 'application/json' });
+    img.onerror = () => {
+      resolve(url);
+    };
+    img.src = url;
+  });
+}
+
+async function exportMenuCatalog() {
+  try {
+    showToast("⏳ Preparando e incrustando fotos en el catálogo...", "info", 1500);
+    const rawItems = await db.menuItems.toArray();
+    const categories = await getCategories();
+
+    // Incrustar todas las imágenes en Base64 para que el JSON sea 100% portable
+    const embeddedItems = await Promise.all(rawItems.map(async (item) => {
+      const cloned = { ...item };
+      if (cloned.img) {
+        cloned.img = await imageToDataUrl(cloned.img);
+      }
+      return cloned;
+    }));
+
+    const catalogData = {
+      type: 'casino_egipto_menu_catalog',
+      version: 1,
+      exportDate: new Date().toISOString(),
+      categories: categories,
+      menuItems: embeddedItems
+    };
+    const blob = new Blob([JSON.stringify(catalogData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `CasinoEgipto_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `CasinoEgipto_Catalogo_Menu_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  });
-  
-  document.getElementById('btn-import-db').addEventListener('click', () => {
-    document.getElementById('import-db-file').click();
-  });
-  
-  document.getElementById('import-db-file').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        if (confirm("¿Desea restaurar esta copia de seguridad del Casino?")) {
-          if (data.menuItems) {
-            for (const item of data.menuItems) await db.menuItems.put(item);
-          }
-          if (data.accounts) {
-            for (const item of data.accounts) await db.accounts.put(item);
-          }
-          if (data.settings) {
-            for (const item of data.settings) await db.settings.put(item);
-          }
-          
-          showToast("Copia de seguridad restaurada con éxito", "success", 2000);
-          await loadUserSettings();
-          await renderMenuGrid();
-          await renderSettingsMenuList();
-          await renderHistoryList();
-        }
-      } catch (err) {
-        showToast("Error al importar: formato JSON no válido", "error", 2500);
-      }
-    };
-    reader.readAsText(file);
-  });
-  
-  document.getElementById('btn-clear-db').addEventListener('click', async () => {
-    if (confirm("¡CUIDADO! Se borrarán todas las cuentas registradas y productos del menú. ¿Está seguro?")) {
-      await db.menuItems.clear();
-      await db.accounts.clear();
-      await db.settings.clear();
-      await initializeMenuSeedData();
+    showToast("📤 Catálogo exportado con fotos 100% incrustadas", "success", 2500);
+  } catch (err) {
+    console.error(err);
+    showToast("Error al exportar menú: " + err.message, "error", 2500);
+  }
+}
+
+async function importMenuCatalog(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      let itemsToImport = [];
+      let catsToImport = [];
       
-      showToast("Base de datos reiniciada con éxito", "info", 1800);
-      setTimeout(() => window.location.reload(), 1200);
+      if (Array.isArray(data)) {
+        itemsToImport = data;
+      } else if (data && data.menuItems && Array.isArray(data.menuItems)) {
+        itemsToImport = data.menuItems;
+        if (data.categories && Array.isArray(data.categories)) {
+          catsToImport = data.categories;
+        }
+      } else {
+        showToast("El archivo no contiene un catálogo de menú válido", "warning", 2500);
+        return;
+      }
+
+      if (confirm(`¿Desea importar ${itemsToImport.length} productos al catálogo del menú? (Sus cuentas no se modificarán).`)) {
+        await db.menuItems.clear();
+        for (const item of itemsToImport) {
+          const cleanItem = { ...item };
+          await db.menuItems.put(cleanItem);
+        }
+        
+        if (catsToImport.length > 0) {
+          await saveCategories(catsToImport);
+        } else {
+          const extractedCats = [...new Set(itemsToImport.map(i => i.category).filter(Boolean))];
+          if (extractedCats.length > 0) {
+            const current = await getCategories();
+            const merged = [...new Set([...current, ...extractedCats])];
+            await saveCategories(merged);
+          }
+        }
+
+        showToast("✅ Catálogo del menú importado con éxito", "success", 2000);
+        await renderMenuGrid();
+        await renderSettingsMenuList();
+        await renderCategoryTabs();
+        await renderCategoriesSettings();
+        await populateCategorySelect();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error al importar: formato JSON no válido", "error", 2500);
     }
-  });
+  };
+  reader.readAsText(file);
+}
+
+async function restoreDefaultMenu() {
+  if (confirm("¿Desea restaurar el catálogo del menú a sus valores iniciales? (No afectará las cuentas registradas).")) {
+    await db.menuItems.clear();
+    for (const item of DEFAULT_MENU_ITEMS) {
+      await db.menuItems.add(item);
+    }
+    await saveCategories(DEFAULT_CATEGORIES);
+    showToast("Menú restaurado a valores por defecto", "info", 1800);
+    await renderMenuGrid();
+    await renderSettingsMenuList();
+    await renderCategoryTabs();
+    await renderCategoriesSettings();
+    await populateCategorySelect();
+  }
+}
+
+async function exportAccountsData() {
+  try {
+    await autoPersistActiveAccount();
+    
+    let accounts = await db.accounts.toArray();
+    try {
+      const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+      Object.values(localAccounts).forEach(localAcc => {
+        if (!accounts.some(a => a.id === localAcc.id)) {
+          accounts.push(localAcc);
+        }
+      });
+    } catch (e) {}
+
+    const accountsData = {
+      type: 'casino_egipto_accounts',
+      version: 1,
+      exportDate: new Date().toISOString(),
+      accounts: accounts
+    };
+
+    const blob = new Blob([JSON.stringify(accountsData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CasinoEgipto_Cuentas_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`📤 ${accounts.length} cuentas exportadas con éxito`, "success", 2000);
+  } catch (err) {
+    console.error(err);
+    showToast("Error al exportar cuentas: " + err.message, "error", 2500);
+  }
+}
+
+async function importAccountsData(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      let accountsToImport = [];
+
+      if (Array.isArray(data)) {
+        accountsToImport = data;
+      } else if (data && data.accounts && Array.isArray(data.accounts)) {
+        accountsToImport = data.accounts;
+      } else {
+        showToast("El archivo no contiene un respaldo de cuentas válido", "warning", 2500);
+        return;
+      }
+
+      if (confirm(`¿Desea importar ${accountsToImport.length} cuentas? (El catálogo de menú no se modificará).`)) {
+        const localStore = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+        for (const acc of accountsToImport) {
+          if (acc && acc.id) {
+            await db.accounts.put(acc);
+            localStore[acc.id] = acc;
+          }
+        }
+        localStorage.setItem('casino_egipto_accounts', JSON.stringify(localStore));
+        
+        showToast(`✅ ${accountsToImport.length} cuentas importadas con éxito`, "success", 2000);
+        await renderHistoryList();
+        
+        // Si hay una cuenta activa importada y no hay cuenta en edición, cargarla
+        const openAcc = accountsToImport.find(a => a.status === 'abierta');
+        if (openAcc && (!STATE.isAccountStarted || Object.keys(STATE.cart).length === 0)) {
+          loadAccountIntoState(openAcc);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error al importar cuentas: formato JSON no válido", "error", 2500);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function setupBackupHandlers() {
+  // --- Menú Backup Handlers ---
+  const btnExportMenu = document.getElementById('btn-export-db');
+  if (btnExportMenu) {
+    btnExportMenu.addEventListener('click', exportMenuCatalog);
+  }
+  
+  const btnImportMenu = document.getElementById('btn-import-db');
+  const inputImportMenu = document.getElementById('import-db-file');
+  if (btnImportMenu && inputImportMenu) {
+    btnImportMenu.addEventListener('click', () => inputImportMenu.click());
+    inputImportMenu.addEventListener('change', (e) => {
+      importMenuCatalog(e.target.files[0]);
+      inputImportMenu.value = '';
+    });
+  }
+  
+  const btnClearMenu = document.getElementById('btn-clear-db');
+  if (btnClearMenu) {
+    btnClearMenu.addEventListener('click', restoreDefaultMenu);
+  }
+
+  // --- Cuentas Backup Handlers (Cuenta & Histórico) ---
+  const fileInputAccounts = document.getElementById('import-accounts-file');
+  if (fileInputAccounts) {
+    fileInputAccounts.addEventListener('change', (e) => {
+      importAccountsData(e.target.files[0]);
+      fileInputAccounts.value = '';
+    });
+  }
+
+  const btnExportAcc = document.getElementById('btn-export-accounts');
+  if (btnExportAcc) {
+    btnExportAcc.addEventListener('click', exportAccountsData);
+  }
+
+  const btnImportAcc = document.getElementById('btn-import-accounts');
+  if (btnImportAcc && fileInputAccounts) {
+    btnImportAcc.addEventListener('click', () => fileInputAccounts.click());
+  }
+
+  const btnExportAccHist = document.getElementById('btn-export-accounts-hist');
+  if (btnExportAccHist) {
+    btnExportAccHist.addEventListener('click', exportAccountsData);
+  }
+
+  const btnImportAccHist = document.getElementById('btn-import-accounts-hist');
+  if (btnImportAccHist && fileInputAccounts) {
+    btnImportAccHist.addEventListener('click', () => fileInputAccounts.click());
+  }
 }
 
 // --- 14. PWA Service Worker & Status ---

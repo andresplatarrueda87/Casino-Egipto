@@ -13,11 +13,11 @@
   <title>Casino Egipto - Control de Restaurante</title>
   
   <!-- Manifest & PWA Icons -->
-  <link rel="manifest" href="manifest.json?v=48">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=48">
-  <link rel="apple-touch-icon" href="app_icon_512.png?v=48">
-  <link rel="icon" type="image/png" sizes="192x192" href="app_icon_192.png?v=48">
-  <link rel="icon" type="image/png" sizes="512x512" href="app_icon_512.png?v=48">
+  <link rel="manifest" href="manifest.json?v=49">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=49">
+  <link rel="apple-touch-icon" href="app_icon_512.png?v=49">
+  <link rel="icon" type="image/png" sizes="192x192" href="app_icon_192.png?v=49">
+  <link rel="icon" type="image/png" sizes="512x512" href="app_icon_512.png?v=49">
   
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -25,10 +25,10 @@
   <!-- Local Libraries for Offline Resilience -->
   <script src="lib/dexie.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
-  <script src="lib/qrcode.min.js?v=48"></script>
+  <script src="lib/qrcode.min.js?v=49"></script>
   
   <!-- Styling -->
-  <link rel="stylesheet" href="style.css?v=48">
+  <link rel="stylesheet" href="style.css?v=49">
 </head>
 <body>
   
@@ -130,6 +130,25 @@
             <p class="total-items-count" id="cart-items-summary">0 productos en total</p>
           </div>
         </div>
+
+        <!-- Account Log / Bitácora Card -->
+        <div class="card account-bitacora-card">
+          <div class="bitacora-header-toggle" id="btn-toggle-bitacora" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">📋</span>
+              <h3 class="card-title" style="margin-bottom: 0;">Bitácora de la Cuenta</h3>
+              <span class="badge-count" id="bitacora-count-badge" style="font-size: 11px; padding: 2px 7px; background: rgba(59, 174, 42, 0.2); color: var(--color-primary); border-radius: 10px; font-weight: 700;">0 registros</span>
+            </div>
+            <button type="button" class="btn btn-text btn-sm" style="padding: 2px 6px; font-size: 13px; color: var(--color-primary); font-weight: 700; background: none; border: none;">
+              <span id="bitacora-toggle-icon">▼</span>
+            </button>
+          </div>
+          <div id="bitacora-content" class="bitacora-content" style="display: block; margin-top: 12px;">
+            <div id="cart-bitacora-container" class="bitacora-list">
+              <!-- Populated dynamically by app.js -->
+            </div>
+          </div>
+        </div>
         
         <!-- Bottom Floating Action Bar with collapse toggle -->
         <div class="bottom-actions" id="bottom-actions-container">
@@ -162,6 +181,24 @@
             </button>
           </div>
         </div>
+
+        <!-- Account Backup Management Card in Cuenta -->
+        <div class="card settings-card margin-top-16">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 16px;">💾</span>
+            <h3 class="card-title" style="margin-bottom: 0;">Respaldo de Cuentas (JSON)</h3>
+          </div>
+          <p class="panel-subtitle" style="margin-bottom: 12px; font-size: 11.5px;">Exporta o importa el historial y estado de todas las cuentas registradas con sus bitácoras.</p>
+          <div class="button-group-row" style="display: flex; gap: 10px;">
+            <button id="btn-export-accounts" class="btn btn-secondary flex-1">
+              <span class="btn-icon">📤</span> Exportar Cuentas
+            </button>
+            <button id="btn-import-accounts" class="btn btn-secondary flex-1">
+              <span class="btn-icon">📥</span> Importar Cuentas
+            </button>
+            <input type="file" id="import-accounts-file" accept=".json" style="display: none;">
+          </div>
+        </div>
       </section>
       
       <!-- ============================================== -->
@@ -187,6 +224,23 @@
         <!-- History Cards List -->
         <div id="history-list" class="history-list">
           <!-- Populated dynamically by app.js -->
+        </div>
+
+        <!-- Account Backup Management Card in Histórico -->
+        <div class="card settings-card margin-top-16">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 16px;">💾</span>
+            <h3 class="card-title" style="margin-bottom: 0;">Respaldo de Cuentas (JSON)</h3>
+          </div>
+          <p class="panel-subtitle" style="margin-bottom: 12px; font-size: 11.5px;">Descarga o restaura una copia de seguridad de todas las cuentas registradas.</p>
+          <div class="button-group-row" style="display: flex; gap: 10px;">
+            <button id="btn-export-accounts-hist" class="btn btn-secondary flex-1">
+              <span class="btn-icon">📤</span> Exportar Cuentas
+            </button>
+            <button id="btn-import-accounts-hist" class="btn btn-secondary flex-1">
+              <span class="btn-icon">📥</span> Importar Cuentas
+            </button>
+          </div>
         </div>
       </section>
       
@@ -321,21 +375,22 @@
           </div>
         </div>
         
-        <!-- Data Backup Management Card -->
+        <!-- Menu Data Backup Management Card -->
         <div class="card settings-card">
-          <h3 class="card-title">Gestión de Copias de Seguridad (JSON)</h3>
+          <h3 class="card-title">🍽️ Gestión del Catálogo del Menú (JSON)</h3>
+          <p class="panel-subtitle" style="margin-bottom: 12px; font-size: 11.5px;">Exporta o importa exclusivamente los platos, precios, fotos y categorías del menú (no afecta las cuentas).</p>
           <div class="button-group-row" style="display: flex; gap: 12px;">
             <button id="btn-export-db" class="btn btn-secondary flex-1">
-              <span class="btn-icon">📤</span> Exportar Respaldo
+              <span class="btn-icon">📤</span> Exportar Catálogo
             </button>
             <button id="btn-import-db" class="btn btn-secondary flex-1">
-              <span class="btn-icon">📥</span> Importar Respaldo
+              <span class="btn-icon">📥</span> Importar Catálogo
             </button>
             <input type="file" id="import-db-file" accept=".json" style="display: none;">
           </div>
           
           <button id="btn-clear-db" class="btn btn-danger btn-block margin-top-16" style="background-color: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444;">
-            <span class="btn-icon">⚠️</span> Borrar Base de Datos
+            <span class="btn-icon">⚠️</span> Restaurar Menú por Defecto
           </button>
         </div>
       </section>
@@ -511,6 +566,6 @@
     }
     window.openPaymentModal = openPaymentModal;
   </script>
-  <script src="app.js?v=48"></script>
+  <script src="app.js?v=49"></script>
 </body>
 </html>
