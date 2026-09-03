@@ -114,16 +114,19 @@
             </div>
           </div>
           
-          <div class="form-row margin-top-12">
-            <div class="form-group flex-1">
-              <label for="cuenta-fecha-inicio">Fecha Inicio</label>
-              <input type="date" id="cuenta-fecha-inicio" class="form-control">
+          <!-- Fechas automáticas (Solo lectura / Informativas) -->
+          <div class="account-dates-row margin-top-12">
+            <div class="account-date-item">
+              <span class="date-item-label">📅 Fecha Inicio</span>
+              <span class="date-item-val" id="cuenta-fecha-inicio-display">--/--/----</span>
             </div>
-            <div class="form-group flex-1">
-              <label for="cuenta-fecha-fin">Último Consumo</label>
-              <input type="date" id="cuenta-fecha-fin" class="form-control">
+            <div class="account-date-item">
+              <span class="date-item-label">🕒 Último Consumo</span>
+              <span class="date-item-val" id="cuenta-fecha-fin-display">--/--/----</span>
             </div>
           </div>
+          <input type="hidden" id="cuenta-fecha-inicio">
+          <input type="hidden" id="cuenta-fecha-fin">
         </div>
         
         <!-- Cart Items List Card -->

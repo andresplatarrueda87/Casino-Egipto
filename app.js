@@ -369,6 +369,24 @@ async function autoPersistActiveAccount() {
   } catch (e) {}
 }
 
+// Actualiza la visualización automática de fechas de la cuenta (solo lectura)
+function updateAccountDatesUI() {
+  const startDisplayEl = document.getElementById('cuenta-fecha-inicio-display');
+  const finDisplayEl = document.getElementById('cuenta-fecha-fin-display');
+  
+  const startInput = document.getElementById('cuenta-fecha-inicio');
+  const finInput = document.getElementById('cuenta-fecha-fin');
+  
+  const formattedStart = formatDateTimeShort(STATE.dateStart || new Date());
+  const formattedEnd = formatDateTimeShort(STATE.dateEnd || new Date());
+  
+  if (startDisplayEl) startDisplayEl.innerText = formattedStart;
+  if (finDisplayEl) finDisplayEl.innerText = formattedEnd;
+  
+  if (startInput) startInput.value = formatDateTimeISO(STATE.dateStart || new Date());
+  if (finInput) finInput.value = formatDateTimeISO(STATE.dateEnd || new Date());
+}
+
 // Carga una cuenta en el estado activo
 function loadAccountIntoState(account) {
   STATE.activeAccountId = account.id || `CTA-${Date.now()}`;
@@ -385,10 +403,7 @@ function loadAccountIntoState(account) {
   STATE.dateStart = account.dateStart ? parseLocalDate(account.dateStart) : new Date();
   STATE.dateEnd = account.dateEnd ? parseLocalDate(account.dateEnd) : new Date();
   
-  const startEl = document.getElementById('cuenta-fecha-inicio');
-  const finEl = document.getElementById('cuenta-fecha-fin');
-  if (startEl) startEl.value = formatDateTimeISO(STATE.dateStart);
-  if (finEl) finEl.value = formatDateTimeISO(STATE.dateEnd);
+  updateAccountDatesUI();
   
   const idDisplayEl = document.getElementById('cuenta-id-display');
   if (idDisplayEl) idDisplayEl.innerText = STATE.activeAccountId;
@@ -636,11 +651,7 @@ async function initNewAccountState(forcedId = null) {
   STATE.isAccountStarted = false;
   STATE.dateStart = now;
   STATE.dateEnd = now;
-  
-  const startEl = document.getElementById('cuenta-fecha-inicio');
-  const finEl = document.getElementById('cuenta-fecha-fin');
-  if (startEl) startEl.value = formatDateTimeISO(STATE.dateStart);
-  if (finEl) finEl.value = formatDateTimeISO(STATE.dateEnd);
+  updateAccountDatesUI();
   
   if (forcedId) {
     STATE.activeAccountId = forcedId;
@@ -786,9 +797,11 @@ function addToCart(item) {
   STATE.isAccountStarted = true;
   
   const now = new Date();
+  if (!wasStarted) {
+    STATE.dateStart = now;
+  }
   STATE.dateEnd = now;
-  const finEl = document.getElementById('cuenta-fecha-fin');
-  if (finEl) finEl.value = formatDateTimeISO(now);
+  updateAccountDatesUI();
 
   if (!wasStarted && (!STATE.bitacora || STATE.bitacora.length === 0)) {
     addBitacoraEntry('INICIO', null, 0, 0, 'Cuenta iniciada');
@@ -1460,8 +1473,11 @@ window.triggerOpenPaymentModal = openPaymentModal;
 
 function getAccountDataFromUI(status = 'abierta') {
   const clientName = STATE.userName || 'Usuario Casino';
-  const dateStart = document.getElementById('cuenta-fecha-inicio').value;
-  const dateEnd = document.getElementById('cuenta-fecha-fin').value;
+  const now = new Date();
+  const startEl = document.getElementById('cuenta-fecha-inicio');
+  const finEl = document.getElementById('cuenta-fecha-fin');
+  const dateStart = (startEl && startEl.value) ? startEl.value : formatDateTimeISO(STATE.dateStart || now);
+  const dateEnd = (finEl && finEl.value) ? finEl.value : formatDateTimeISO(STATE.dateEnd || now);
   
   // Clone items with exact price snapshot at this time
   const items = Object.values(STATE.cart).map(i => ({
