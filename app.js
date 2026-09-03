@@ -752,13 +752,15 @@ function renderCartView() {
     grandTotal += subtotal;
     totalQty += item.qty;
     
+    const displayName = (item.name || '').length > 9 ? (item.name.slice(0, 9) + '...') : (item.name || '');
+    
     const row = document.createElement('div');
     row.className = 'cart-item-row';
     row.innerHTML = `
       <div class="cart-item-info">
         <img src="${item.img || 'img/almuerzo.jpg'}" class="cart-item-thumb" onerror="this.src='img/almuerzo.jpg'">
         <div>
-          <div class="cart-item-name">${item.name}</div>
+          <div class="cart-item-name" title="${item.name}">${displayName}</div>
           <div class="cart-item-unit-price">${formatCurrency(item.price)} c/u</div>
         </div>
       </div>
