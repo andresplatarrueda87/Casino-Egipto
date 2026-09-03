@@ -93,15 +93,21 @@
         <!-- Account Info Card -->
         <div class="card account-info-card">
           <div class="account-user-header">
-            <!-- Fila superior: Usuario y Estado -->
+            <!-- Fila 1: Usuario con Avatar -->
             <div class="account-user-top">
               <div class="account-user-details">
                 <span class="user-avatar-icon">👤</span>
                 <h3 class="user-name-title" id="cuenta-user-display">Andres Platarrueda</h3>
               </div>
-              <span class="account-status-badge" id="cuenta-status-badge">Cuenta Abierta</span>
             </div>
-            <!-- Fila inferior: ID Cuenta que ocupa el espacio hasta el borde derecho -->
+            
+            <!-- Fila 2: Estado de la Cuenta (con espacio para no quedar pegado al nombre) -->
+            <div class="account-status-row">
+              <span class="status-row-label">Estado:</span>
+              <span class="account-status-badge open" id="cuenta-status-badge">Cuenta Activa</span>
+            </div>
+
+            <!-- Fila 3: ID de Cuenta individual a todo el ancho hasta el borde derecho -->
             <div class="account-id-chip full-width" id="cuenta-id-chip">
               <span class="id-label">ID Cuenta:</span>
               <span class="id-val" id="cuenta-id-display">Cargando...</span>

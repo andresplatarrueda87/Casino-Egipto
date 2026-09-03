@@ -282,12 +282,14 @@ function renderBitacoraListHtml(list) {
     }
 
     return `
-      <div class="bitacora-entry" style="padding: 7px 10px; margin-bottom: 6px;">
-        <div class="bitacora-left">
+      <div class="bitacora-entry">
+        <div class="bitacora-entry-top">
           <span class="bitacora-badge ${badgeClass}">${badgeText}</span>
-          <span class="bitacora-desc" title="${entry.description}">${entry.description}</span>
+          <span class="bitacora-time">🕒 ${entry.timeFormatted}</span>
         </div>
-        <span class="bitacora-time" style="font-size: 10px;">${entry.timeFormatted}</span>
+        <div class="bitacora-desc">
+          ${entry.description}
+        </div>
       </div>
     `;
   }).join('');
@@ -612,7 +614,7 @@ function updateAccountStatusUI() {
 
   if (isStarted) {
     if (badgeEl) {
-      badgeEl.innerText = "Cuenta Abierta";
+      badgeEl.innerText = "Cuenta Activa";
       badgeEl.className = "account-status-badge open";
     }
     if (iconEl) iconEl.innerText = "💾";
