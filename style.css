@@ -217,6 +217,45 @@ body {
   border: 1px solid rgba(37, 99, 235, 0.4);
 }
 
+.account-id-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.account-id-chip .id-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.account-id-chip .id-val {
+  color: var(--color-primary);
+  font-weight: 700;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.badge-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  user-select: none;
+}
+
 /* Form Controls */
 .form-row {
   display: flex;

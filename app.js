@@ -167,6 +167,46 @@ function formatActionDateTime(date) {
   return `${day}/${month}/${year} ${pad(hours)}:${minutes}:${seconds} ${ampm}`;
 }
 
+// Generador correlativo de ID de Cuenta (ej: CTA-20260903-01)
+async function getNextAccountId(dateObj = new Date()) {
+  const d = parseLocalDate(dateObj);
+  const pad = num => String(num).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const datePrefix = `CTA-${year}${month}${day}`;
+  
+  let allAccounts = [];
+  try {
+    allAccounts = await db.accounts.toArray();
+  } catch (e) {}
+  try {
+    const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+    Object.values(localAccounts).forEach(acc => {
+      if (acc && acc.id && !allAccounts.some(a => a.id === acc.id)) {
+        allAccounts.push(acc);
+      }
+    });
+  } catch (e) {}
+
+  let maxSeq = 0;
+  const regex = new RegExp(`^${datePrefix}-(\\d+)$`, 'i');
+  allAccounts.forEach(acc => {
+    if (acc && acc.id) {
+      const m = acc.id.match(regex);
+      if (m) {
+        const seq = parseInt(m[1], 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+  });
+
+  const nextSeq = maxSeq + 1;
+  return `${datePrefix}-${pad(nextSeq)}`;
+}
+
 // Registro de movimientos en la Bitácora de la Cuenta
 function addBitacoraEntry(action, itemName = '', qtyChange = 0, currentQty = 0, customNote = '') {
   if (!STATE.bitacora) STATE.bitacora = [];
@@ -288,9 +328,9 @@ async function autoPersistActiveAccount() {
 
 // Carga una cuenta en el estado activo
 function loadAccountIntoState(account) {
-  STATE.activeAccountId = account.id || `CUENTA-${Date.now()}`;
+  STATE.activeAccountId = account.id || `CTA-${Date.now()}`;
   STATE.cart = {};
-  STATE.isAccountStarted = true;
+  STATE.isAccountStarted = (account.status === 'abierta');
   STATE.bitacora = Array.isArray(account.bitacora) ? [...account.bitacora] : [];
   
   if (account.items && Array.isArray(account.items)) {
@@ -307,51 +347,67 @@ function loadAccountIntoState(account) {
   if (startEl) startEl.value = formatDateTimeISO(STATE.dateStart);
   if (finEl) finEl.value = formatDateTimeISO(STATE.dateEnd);
   
+  const idDisplayEl = document.getElementById('cuenta-id-display');
+  if (idDisplayEl) idDisplayEl.innerText = STATE.activeAccountId;
+  
   updateAccountStatusUI();
   updateCartNavBadge();
   renderCartView();
   renderCartBitacoraUI();
 }
 
-// Carga automática de cuenta activa al iniciar la aplicación
+// Carga automática de cuenta activa al iniciar la aplicación (solo 1 activa a la vez)
 async function loadActiveAccountOnStartup() {
   let openAccount = null;
-  
+  let allOpenAccounts = [];
+
   try {
     const accounts = await db.accounts.toArray();
-    const openAccounts = accounts.filter(a => a.status === 'abierta');
-    if (openAccounts.length > 0) {
-      openAccounts.sort((a, b) => {
-        const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
-        const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
-        return timeB - timeA;
-      });
-      openAccount = openAccounts[0];
-    }
+    allOpenAccounts = accounts.filter(a => a.status === 'abierta');
   } catch (e) {
     console.warn("Error leyendo cuentas en startup desde Dexie:", e);
   }
   
-  if (!openAccount) {
-    try {
-      const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
-      const openLocals = Object.values(localAccounts).filter(a => a && a.status === 'abierta');
-      if (openLocals.length > 0) {
-        openLocals.sort((a, b) => {
-          const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
-          const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
-          return timeB - timeA;
-        });
-        openAccount = openLocals[0];
+  try {
+    const localAccounts = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+    const openLocals = Object.values(localAccounts).filter(a => a && a.status === 'abierta');
+    openLocals.forEach(loc => {
+      if (!allOpenAccounts.some(a => a.id === loc.id)) {
+        allOpenAccounts.push(loc);
       }
-    } catch (e) {}
+    });
+  } catch (e) {}
+
+  if (allOpenAccounts.length > 0) {
+    allOpenAccounts.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
+      return timeB - timeA;
+    });
+    openAccount = allOpenAccounts[0];
+
+    // Regla: Solo puede existir una cuenta activa a la vez. Sellar cualquier otra previa como cerrada.
+    if (allOpenAccounts.length > 1) {
+      for (let i = 1; i < allOpenAccounts.length; i++) {
+        const extraAcc = allOpenAccounts[i];
+        extraAcc.status = 'cerrada';
+        try { await db.accounts.put(extraAcc); } catch (e) {}
+        try {
+          const localAccs = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
+          if (localAccs[extraAcc.id]) {
+            localAccs[extraAcc.id].status = 'cerrada';
+            localStorage.setItem('casino_egipto_accounts', JSON.stringify(localAccs));
+          }
+        } catch (e) {}
+      }
+    }
   }
-  
+
   if (openAccount) {
     loadAccountIntoState(openAccount);
     console.log("✅ Cuenta activa cargada automáticamente:", openAccount.id);
   } else {
-    initNewAccountState();
+    await initNewAccountState();
   }
 }
 
@@ -402,7 +458,7 @@ async function initApp() {
     await loadActiveAccountOnStartup();
   } catch (e) {
     console.error("Error cargando cuenta activa:", e);
-    initNewAccountState();
+    await initNewAccountState();
   }
 
   try {
@@ -508,6 +564,11 @@ function updateAccountStatusUI() {
   const hasCartItems = Object.keys(STATE.cart).length > 0;
   const isStarted = STATE.isAccountStarted || hasCartItems;
   
+  const idDisplayEl = document.getElementById('cuenta-id-display');
+  if (idDisplayEl && STATE.activeAccountId) {
+    idDisplayEl.innerText = STATE.activeAccountId;
+  }
+
   if (isStarted) {
     if (badgeEl) {
       badgeEl.innerText = "Cuenta Abierta";
@@ -525,9 +586,8 @@ function updateAccountStatusUI() {
   }
 }
 
-function initNewAccountState() {
+async function initNewAccountState(forcedId = null) {
   const now = new Date();
-  STATE.activeAccountId = `CUENTA-${now.getTime()}`;
   STATE.cart = {};
   STATE.bitacora = [];
   STATE.isAccountStarted = false;
@@ -538,6 +598,15 @@ function initNewAccountState() {
   const finEl = document.getElementById('cuenta-fecha-fin');
   if (startEl) startEl.value = formatDateTimeISO(STATE.dateStart);
   if (finEl) finEl.value = formatDateTimeISO(STATE.dateEnd);
+  
+  if (forcedId) {
+    STATE.activeAccountId = forcedId;
+  } else {
+    STATE.activeAccountId = await getNextAccountId(now);
+  }
+
+  const idDisplayEl = document.getElementById('cuenta-id-display');
+  if (idDisplayEl) idDisplayEl.innerText = STATE.activeAccountId;
   
   updateAccountStatusUI();
   updateCartNavBadge();
@@ -896,7 +965,7 @@ function setupEventListeners() {
     await generateTicketPdf(accountData);
   });
   
-  // Send Email Listener
+  // Send Email / Share Listener (Sin bitácora)
   document.getElementById('btn-send-email-main').addEventListener('click', async () => {
     const accountData = getAccountDataFromUI();
     if (!accountData || accountData.items.length === 0) {
@@ -904,8 +973,22 @@ function setupEventListeners() {
       return;
     }
     await saveAccountFromUI(false);
-    await sendAccountByEmail(accountData);
+    await sendAccountByEmail(accountData, false);
   });
+
+  // Share with Bitácora Listener
+  const btnShareBitacoraMain = document.getElementById('btn-share-with-bitacora-main');
+  if (btnShareBitacoraMain) {
+    btnShareBitacoraMain.addEventListener('click', async () => {
+      const accountData = getAccountDataFromUI();
+      if (!accountData || accountData.items.length === 0) {
+        showToast("Debe agregar al menos un producto a la cuenta", "warning", 2000);
+        return;
+      }
+      await saveAccountFromUI(false);
+      await sendAccountByEmail(accountData, true);
+    });
+  }
   
   // Finalize Account Listener ("Limpiar" -> "Finalizar Cuenta")
   document.getElementById('btn-clear-account').addEventListener('click', async () => {
@@ -915,15 +998,17 @@ function setupEventListeners() {
       return;
     }
     
-    if (confirm("¿Desea finalizar y cerrar la cuenta actual? Se guardará como CERRADA en el histórico y el botón volverá a Iniciar Cuenta.")) {
-      addBitacoraEntry('CIERRE', null, 0, 0, 'Cuenta finalizada y guardada como cerrada');
+    const accountId = STATE.activeAccountId || 'esta cuenta';
+    if (confirm(`¿Desea finalizar y cerrar la cuenta [${accountId}]? Se guardará definitivamente en el histórico y no podrá ser editada.`)) {
+      addBitacoraEntry('CIERRE', null, 0, 0, `Cuenta ${accountId} finalizada y guardada como cerrada`);
       if (cartItemsCount > 0 || (STATE.bitacora && STATE.bitacora.length > 0)) {
         await saveAccountFromUI(false, 'cerrada');
       }
-      initNewAccountState();
+      await initNewAccountState();
       renderCartView();
       renderMenuGrid();
-      showToast("Cuenta finalizada y cerrada en el histórico.", "success", 2500);
+      await renderHistoryList();
+      showToast(`Cuenta [${accountId}] finalizada y cerrada en el histórico.`, "success", 2500);
     }
   });
   
@@ -1536,6 +1621,9 @@ async function renderHistoryList() {
     card.innerHTML = `
       <div class="history-header">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span class="account-id-chip" style="font-size: 10px; padding: 1px 6px;">
+            <span class="id-val">${account.id || 'S/ID'}</span>
+          </span>
           <span class="history-client">${account.clientName || 'Usuario Casino'}</span>
           ${statusBadgeHtml}
           <span class="history-dates">${dateRangeHeader}</span>
@@ -1559,9 +1647,13 @@ async function renderHistoryList() {
         ${bitacoraHtml}
         <div class="history-actions margin-top-12">
           ${payButtonHtml}
-          <button class="btn btn-secondary btn-sm btn-edit-account" data-id="${account.id}">Cargar / Editar</button>
+          ${isOpen 
+            ? `<button class="btn btn-secondary btn-sm btn-edit-account" data-id="${account.id}">✏️ Continuar Cuenta</button>`
+            : `<span class="badge-readonly" title="Esta cuenta fue finalizada y no puede ser editada">🔒 Cuenta Cerrada</span>`
+          }
           <button class="btn btn-accent btn-sm btn-pdf-account" data-id="${account.id}">Generar Ticket</button>
           <button class="btn btn-sm btn-email-account" data-id="${account.id}" style="background-color: #1877f2; color: #ffffff; border: none; font-weight: 600;">📊 Compartir</button>
+          <button class="btn btn-sm btn-share-bitacora-account" data-id="${account.id}" style="background-color: #059669; color: #ffffff; border: none; font-weight: 600;">📋 Compartir con Bitácora</button>
           <button class="btn btn-danger btn-sm btn-delete-account" data-id="${account.id}">Eliminar</button>
         </div>
       </div>
@@ -1586,11 +1678,16 @@ async function renderHistoryList() {
       }
     });
     
-    card.querySelector('.btn-edit-account').addEventListener('click', () => {
-      loadAccountIntoState(account);
-      document.querySelector('.nav-btn[data-target="panel-cuenta"]').click();
-      showToast("Cuenta cargada para edición", "info", 1800);
-    });
+    if (isOpen) {
+      const editBtn = card.querySelector('.btn-edit-account');
+      if (editBtn) {
+        editBtn.addEventListener('click', () => {
+          loadAccountIntoState(account);
+          document.querySelector('.nav-btn[data-target="panel-cuenta"]').click();
+          showToast(`Cuenta [${account.id}] cargada para continuar`, "info", 1800);
+        });
+      }
+    }
     
     if (isOpen) {
       const payBtn = card.querySelector('.btn-pay-account');
@@ -1606,8 +1703,15 @@ async function renderHistoryList() {
     });
     
     card.querySelector('.btn-email-account').addEventListener('click', () => {
-      sendAccountByEmail(account);
+      sendAccountByEmail(account, false);
     });
+
+    const btnShareBitacora = card.querySelector('.btn-share-bitacora-account');
+    if (btnShareBitacora) {
+      btnShareBitacora.addEventListener('click', () => {
+        sendAccountByEmail(account, true);
+      });
+    }
     
     card.querySelector('.btn-delete-account').addEventListener('click', async () => {
       if (confirm(`¿Eliminar la cuenta de ${account.clientName}?`)) {
@@ -1776,11 +1880,13 @@ async function renderSettingsMenuList() {
 }
 
 // --- 11. Ticket PDF Generation (`pdf-lib.js`) ---
-async function generateTicketPdfBytes(accountData) {
+async function generateTicketPdfBytes(accountData, includeBitacora = false) {
   const { PDFDocument, rgb, StandardFonts } = PDFLib;
   const pdfDoc = await PDFDocument.create();
   
-  const pageHeight = Math.max(450, 220 + (accountData.items ? accountData.items.length * 25 : 50));
+  const bitacoraList = (includeBitacora && Array.isArray(accountData.bitacora)) ? accountData.bitacora : [];
+  const bitacoraExtraHeight = bitacoraList.length > 0 ? (bitacoraList.length * 15 + 40) : 0;
+  const pageHeight = Math.max(450, 240 + (accountData.items ? accountData.items.length * 25 : 50) + bitacoraExtraHeight);
   const page = pdfDoc.addPage([300, pageHeight]);
   
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1800,6 +1906,8 @@ async function generateTicketPdfBytes(accountData) {
   
   // Meta Info
   page.drawText(`Titular: ${accountData.clientName || 'Usuario Casino'}`, { x: 15, y: y, size: 10, font: fontBold });
+  y -= 14;
+  page.drawText(`Cuenta ID: ${accountData.id || ''}`, { x: 15, y: y, size: 9, font: fontBold, color: rgb(0.1, 0.45, 0.85) });
   y -= 14;
   page.drawText(`Fecha Inicio: ${formatDateTimeShort(accountData.dateStart)}`, { x: 15, y: y, size: 9, font: fontRegular });
   y -= 14;
@@ -1836,19 +1944,38 @@ async function generateTicketPdfBytes(accountData) {
   // Total
   page.drawText("TOTAL A PAGAR:", { x: 80, y: y, size: 12, font: fontBold });
   page.drawText(formatCurrency(accountData.total), { x: 190, y: y, size: 14, font: fontBold, color: rgb(0.23, 0.68, 0.16) });
+  y -= 20;
   
-  y -= 30;
+  // Bitácora de movimientos si aplica
+  if (bitacoraList.length > 0) {
+    page.drawLine({ start: { x: 15, y: y }, end: { x: 285, y: y }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+    y -= 16;
+    page.drawText(`BITACORA DE MOVIMIENTOS (${bitacoraList.length})`, { x: 15, y: y, size: 9, font: fontBold, color: rgb(0.1, 0.45, 0.85) });
+    y -= 14;
+    
+    bitacoraList.forEach(entry => {
+      const lineText = `[${entry.timeFormatted || ''}] ${entry.description || ''}`;
+      const safeText = lineText.length > 46 ? lineText.substring(0, 44) + '...' : lineText;
+      page.drawText(safeText, { x: 15, y: y, size: 7.5, font: fontRegular, color: rgb(0.3, 0.3, 0.3) });
+      y -= 14;
+    });
+    y -= 8;
+  }
+  
+  y -= 14;
   page.drawText("¡Gracias por su consumo en Casino Egipto!", { x: 50, y: y, size: 9, font: fontRegular, color: rgb(0.5, 0.5, 0.5) });
   
   return await pdfDoc.save();
 }
 
-async function generateTicketPdf(accountData) {
+async function generateTicketPdf(accountData, includeBitacora = false) {
   try {
-    const pdfBytes = await generateTicketPdfBytes(accountData);
+    const pdfBytes = await generateTicketPdfBytes(accountData, includeBitacora);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
-    const fileName = `Ticket_CasinoEgipto_${(accountData.clientName || 'Usuario').replace(/\s+/g, '_')}.pdf`;
+    const suffix = includeBitacora ? '_Bitacora' : '';
+    const safeId = (accountData.id || 'CTA').replace(/[^a-zA-Z0-9_-]/g, '');
+    const fileName = `Ticket_CasinoEgipto_${safeId}_${(accountData.clientName || 'Usuario').replace(/\s+/g, '_')}${suffix}.pdf`;
     
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -1880,16 +2007,40 @@ async function generateTicketPdf(accountData) {
   }
 }
 
-// --- 12. Email Sharing with PDF Attachment ---
-async function sendAccountByEmail(accountData) {
+// --- 12. Email / Web Sharing with PDF Attachment & Bitácora ---
+async function sendAccountByEmail(accountData, includeBitacora = false) {
   try {
-    const pdfBytes = await generateTicketPdfBytes(accountData);
-    const fileName = `Ticket_CasinoEgipto_${(accountData.clientName || 'Usuario').replace(/\s+/g, '_')}.pdf`;
+    const pdfBytes = await generateTicketPdfBytes(accountData, includeBitacora);
+    const suffix = includeBitacora ? '_Bitacora' : '';
+    const safeId = (accountData.id || 'CTA').replace(/[^a-zA-Z0-9_-]/g, '');
+    const fileName = `Ticket_CasinoEgipto_${safeId}_${(accountData.clientName || 'Usuario').replace(/\s+/g, '_')}${suffix}.pdf`;
     const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
     const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
     
-    const subject = `Cuenta Casino Egipto - ${accountData.clientName || 'Usuario'}`;
-    const bodyText = `Cordial saludo,\n\nAdjunto el consumo detallado en Casino Egipto para ${accountData.clientName}.\nTotal: ${formatCurrency(accountData.total)}\n\nAtentamente,\nCasino Egipto`;
+    const subject = `Cuenta Casino Egipto [${accountData.id || ''}] - ${accountData.clientName || 'Usuario'}${includeBitacora ? ' (Con Bitácora)' : ''}`;
+    
+    let bodyText = `Cordial saludo,\n\nAdjunto el consumo detallado en Casino Egipto para ${accountData.clientName || 'Usuario'}.\n`;
+    bodyText += `Cuenta ID: ${accountData.id || ''}\n`;
+    bodyText += `Fechas: ${formatDateTimeShort(accountData.dateStart)} a ${formatDateTimeShort(accountData.dateEnd)}\n`;
+    bodyText += `Total: ${formatCurrency(accountData.total)}\n\n`;
+    
+    bodyText += `--- PRODUCTOS CONSUMIDOS ---\n`;
+    if (accountData.items && accountData.items.length > 0) {
+      accountData.items.forEach(i => {
+        bodyText += `• ${i.qty}x ${i.name} (${formatCurrency(i.price)}) = ${formatCurrency(i.qty * i.price)}\n`;
+      });
+    } else {
+      bodyText += `(Sin productos)\n`;
+    }
+    
+    if (includeBitacora && Array.isArray(accountData.bitacora) && accountData.bitacora.length > 0) {
+      bodyText += `\n--- BITÁCORA DE MOVIMIENTOS (${accountData.bitacora.length}) ---\n`;
+      accountData.bitacora.forEach((b, idx) => {
+        bodyText += `${idx + 1}. [${b.timeFormatted}] ${b.description}\n`;
+      });
+    }
+    
+    bodyText += `\nAtentamente,\nCasino Egipto`;
     
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     
@@ -1914,7 +2065,7 @@ async function sendAccountByEmail(accountData) {
   } catch (err) {
     if (err.name !== 'AbortError') {
       console.error(err);
-      showToast("Error al enviar correo: " + err.message, "error", 2500);
+      showToast("Error al compartir: " + err.message, "error", 2500);
     }
   }
 }
@@ -2085,10 +2236,25 @@ async function exportAccountsData() {
       });
     } catch (e) {}
 
+    // Garantizar que cada cuenta exportada mantenga su bitácora individual limpia y completa
+    accounts = accounts.map(acc => {
+      let bList = [];
+      if (acc.id === STATE.activeAccountId && Array.isArray(STATE.bitacora)) {
+        bList = [...STATE.bitacora];
+      } else if (Array.isArray(acc.bitacora)) {
+        bList = [...acc.bitacora];
+      }
+      return {
+        ...acc,
+        bitacora: bList
+      };
+    });
+
     const accountsData = {
       type: 'casino_egipto_accounts',
       version: 1,
       exportDate: new Date().toISOString(),
+      totalAccounts: accounts.length,
       accounts: accounts
     };
 
@@ -2099,7 +2265,7 @@ async function exportAccountsData() {
     a.download = `CasinoEgipto_Cuentas_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`📤 ${accounts.length} cuentas exportadas con éxito`, "success", 2000);
+    showToast(`📤 ${accounts.length} cuentas exportadas con bitácora individual`, "success", 2000);
   } catch (err) {
     console.error(err);
     showToast("Error al exportar cuentas: " + err.message, "error", 2500);
@@ -2123,20 +2289,38 @@ async function importAccountsData(file) {
         return;
       }
 
-      if (confirm(`¿Desea importar ${accountsToImport.length} cuentas? (El catálogo de menú no se modificará).`)) {
+      if (confirm(`¿Desea importar ${accountsToImport.length} cuentas con sus bitácoras individuales? (El catálogo de menú no se modificará).`)) {
+        // Regla: Solo puede existir una cuenta activa (abierta) a la vez
+        const openAccountsInImport = accountsToImport.filter(a => a && a.status === 'abierta');
+        if (openAccountsInImport.length > 1) {
+          openAccountsInImport.sort((a, b) => {
+            const timeA = new Date(a.updatedAt || a.dateEnd || 0).getTime();
+            const timeB = new Date(b.updatedAt || b.dateEnd || 0).getTime();
+            return timeB - timeA;
+          });
+          // Solo la más reciente permanece abierta; las anteriores se sellan como cerradas
+          for (let i = 1; i < openAccountsInImport.length; i++) {
+            openAccountsInImport[i].status = 'cerrada';
+          }
+        }
+
         const localStore = JSON.parse(localStorage.getItem('casino_egipto_accounts') || '{}');
         for (const acc of accountsToImport) {
           if (acc && acc.id) {
+            // Asegurar que la bitácora individual esté preservada
+            acc.bitacora = Array.isArray(acc.bitacora) ? [...acc.bitacora] : [];
+            acc.items = Array.isArray(acc.items) ? [...acc.items] : [];
+            
             await db.accounts.put(acc);
             localStore[acc.id] = acc;
           }
         }
         localStorage.setItem('casino_egipto_accounts', JSON.stringify(localStore));
         
-        showToast(`✅ ${accountsToImport.length} cuentas importadas con éxito`, "success", 2000);
+        showToast(`✅ ${accountsToImport.length} cuentas importadas con sus bitácoras`, "success", 2000);
         await renderHistoryList();
         
-        // Si hay una cuenta activa importada y no hay cuenta en edición, cargarla
+        // Si hay una cuenta activa importada y no hay consumo en curso, cargarla
         const openAcc = accountsToImport.find(a => a.status === 'abierta');
         if (openAcc && (!STATE.isAccountStarted || Object.keys(STATE.cart).length === 0)) {
           loadAccountIntoState(openAcc);
