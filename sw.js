@@ -1,4 +1,4 @@
-const CACHE_NAME = 'casino-egipto-v49';
+const CACHE_NAME = 'casino-egipto-v52';
 const ASSETS = [
   './',
   './index.html',
@@ -12,7 +12,23 @@ const ASSETS = [
   './img/almuerzo.jpg',
   './img/almuerzo_sopa.jpg',
   './img/desayuno.jpg',
-  './img/agua_botella.jpg'
+  './img/agua_botella.jpg',
+  './img/coca-cola-original-400-ml.jpg',
+  './img/cocacola-zero-400ml.jpg',
+  './img/galletas-festival-x6.jpg',
+  './img/palomitasyupi.png',
+  './img/Cheetos.jpg',
+  './img/Choclitos.jpg',
+  './img/Natuchips.jpg',
+  './img/TostiEmpanadas.jpg',
+  './img/Cheestres.jpg',
+  './img/Doritos.jpg',
+  './img/Margarita.jpg',
+  './img/Rizadas.jpg',
+  './img/Doritos Dinamita.jpg',
+  './img/ClubSocial.jpg',
+  './img/Chocolatina-Jet-11g.webp',
+  './img/BomBomBum.jpg'
 ];
 
 self.addEventListener('install', event => {

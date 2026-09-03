@@ -19,17 +19,28 @@ db.version(2).stores({
 const DEFAULT_MENU_ITEMS = [
   { name: "Almuerzo", price: 16000, category: "Almuerzos", img: "img/almuerzo.jpg" },
   { name: "Almuerzo con Sopa", price: 17000, category: "Almuerzos", img: "img/almuerzo_sopa.jpg" },
-  { name: "Desayuno", price: 9000, category: "Desayunos", img: "img/desayuno.jpg" },
+  { name: "Desayuno", price: 7000, category: "Desayunos", img: "img/desayuno.jpg" },
   { name: "Agua botella 600 ml", price: 2000, category: "Bebidas", img: "img/agua_botella.jpg" },
   { name: "Sopa", price: 1000, category: "Almuerzos", img: "img/almuerzo_sopa.jpg" },
   { name: "CocaCola 400 ml", price: 3000, category: "Bebidas", img: "img/coca-cola-original-400-ml.jpg" },
   { name: "CocaCola Zero 400 ml", price: 3000, category: "Bebidas", img: "img/cocacola-zero-400ml.jpg" },
   { name: "Galleta Festival x6", price: 1500, category: "Galletas", img: "img/galletas-festival-x6.jpg" },
   { name: "Palomitas Caramelo Yupi", price: 2000, category: "Paquetes", img: "img/palomitasyupi.png" },
-  { name: "Chocolatina Jet 11 g", price: 1000, category: "Chocolatinas", img: "img/Chocolatina-Jet-11g.webp" }
+  { name: "Cheetos", price: 3000, category: "Paquetes", img: "img/Cheetos.jpg" },
+  { name: "Choclitos", price: 2000, category: "Paquetes", img: "img/Choclitos.jpg" },
+  { name: "Natuchips", price: 2500, category: "Paquetes", img: "img/Natuchips.jpg" },
+  { name: "TostiEmpanada", price: 1500, category: "Paquetes", img: "img/TostiEmpanadas.jpg" },
+  { name: "Cheestres", price: 3000, category: "Paquetes", img: "img/Cheestres.jpg" },
+  { name: "Doritos", price: 3000, category: "Paquetes", img: "img/Doritos.jpg" },
+  { name: "Margarita", price: 2000, category: "Paquetes", img: "img/Margarita.jpg" },
+  { name: "Rizadas", price: 3000, category: "Paquetes", img: "img/Rizadas.jpg" },
+  { name: "Doritos Dinamita", price: 2000, category: "Paquetes", img: "img/Doritos Dinamita.jpg" },
+  { name: "ClubSocial", price: 1000, category: "Galletas", img: "img/ClubSocial.jpg" },
+  { name: "Chocolatina Jet 11 g", price: 1000, category: "Chocolatinas", img: "img/Chocolatina-Jet-11g.webp" },
+  { name: "BomBomBum", price: 1000, category: "Dulces", img: "img/BomBomBum.jpg" }
 ];
 
-const DEFAULT_CATEGORIES = ["Almuerzos", "Desayunos", "Bebidas", "Sopas", "Galletas", "Paquetes", "Chocolatinas", "Otros"];
+const DEFAULT_CATEGORIES = ["Almuerzos", "Desayunos", "Bebidas", "Sopas", "Galletas", "Paquetes", "Chocolatinas", "Dulces", "Otros"];
 
 const DEFAULT_USER_NAME = "Andres Platarrueda";
 const DEFAULT_BANCOLOMBIA_NUM = "838-567083-43";
@@ -413,9 +424,22 @@ async function initializeMenuSeedData() {
   try {
     const currentItems = await db.menuItems.toArray();
     for (const item of DEFAULT_MENU_ITEMS) {
-      const exists = currentItems.some(i => i.name && i.name.trim().toLowerCase() === item.name.trim().toLowerCase());
-      if (!exists) {
+      const existing = currentItems.find(i => i.name && i.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      if (!existing) {
         await db.menuItems.add(item);
+      } else {
+        let changed = false;
+        if (item.name.trim().toLowerCase() === 'desayuno' && existing.price === 9000) {
+          existing.price = 7000;
+          changed = true;
+        }
+        if (item.name.trim().toLowerCase() === 'clubsocial' && existing.category !== 'Galletas') {
+          existing.category = 'Galletas';
+          changed = true;
+        }
+        if (changed) {
+          await db.menuItems.put(existing);
+        }
       }
     }
   } catch (e) {
