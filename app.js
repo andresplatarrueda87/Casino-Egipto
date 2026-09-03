@@ -752,7 +752,7 @@ function renderCartView() {
     grandTotal += subtotal;
     totalQty += item.qty;
     
-    const displayName = (item.name || '').length > 9 ? (item.name.slice(0, 9) + '...') : (item.name || '');
+    const displayName = (item.name || '').slice(0, 12);
     
     const row = document.createElement('div');
     row.className = 'cart-item-row';

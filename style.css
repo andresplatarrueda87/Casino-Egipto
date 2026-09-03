@@ -422,76 +422,87 @@ label {
 .cart-items-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .cart-item-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px;
+  padding: 6px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--card-border);
   border-radius: var(--radius-sm);
-  gap: 10px;
+  gap: 8px;
 }
 
 .cart-item-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 
 .cart-item-thumb {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
   object-fit: contain;
   background-color: #141416;
-  padding: 2px;
+  padding: 1px;
+  flex-shrink: 0;
 }
 
 .cart-item-name {
-  font-size: 13.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #ffffff;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .cart-item-unit-price {
-  font-size: 11.5px;
+  font-size: 10.5px;
   color: var(--text-secondary);
+  line-height: 1.2;
 }
 
 .cart-item-qty-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .qty-btn {
   background: #27272a;
   border: 1px solid var(--card-border);
   color: #ffffff;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .qty-val {
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 700;
-  min-width: 20px;
+  min-width: 16px;
   text-align: center;
 }
 
 .cart-item-subtotal {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 800;
   color: var(--color-primary);
   text-align: right;
+  line-height: 1.2;
 }
 
 .cart-item-right-box {
@@ -499,17 +510,17 @@ label {
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: 4px;
-  min-width: 65px;
+  gap: 2px;
+  min-width: 60px;
 }
 
 .btn-remove-item {
   background-color: rgba(239, 68, 68, 0.15) !important;
   color: #f87171 !important;
   border: 1px solid rgba(239, 68, 68, 0.35) !important;
-  border-radius: 6px !important;
-  padding: 2px 7px !important;
-  font-size: 11px !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  font-size: 10px !important;
   font-weight: 700 !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -517,6 +528,7 @@ label {
   gap: 2px !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
+  line-height: 1 !important;
 }
 
 .btn-remove-item:hover {
